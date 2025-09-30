@@ -15,10 +15,10 @@ from mcp import FastMCP
 import websockets
 
 # Import our Snap! specific modules
-from tools.block_generator import SnapBlockGenerator, Intent, BlockSequence
+from tools.block_generator import SnapBlockGenerator, BlockSequence
 from tools.concept_explainer import ConceptExplainer
 from tools.tutorial_creator import TutorialCreator
-from parsers.intent_parser import SnapIntentParser
+from parsers.intent_parser import SnapIntentParser, ParsedIntent
 from tools.snap_communicator import SnapBridgeCommunicator
 
 # Initialize MCP server

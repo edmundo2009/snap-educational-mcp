@@ -1,0 +1,342 @@
+{
+  "concepts": {
+    "loops": {
+      "beginner": {
+        "text": "Loops are like doing the same thing over and over! Instead of writing the same blocks many times, you can use a loop block to repeat them automatically. It's like telling your sprite 'do this 10 times' instead of copying the same blocks 10 times.",
+        "key_points": [
+          "Loops save time by repeating actions",
+          "The 'repeat' block is the simplest loop",
+          "You can loop forever or a specific number of times",
+          "Loops make your programs shorter and easier to read"
+        ],
+        "examples": [
+          "Repeat 10 times: move 10 steps (makes sprite move in a line)",
+          "Forever: turn 15 degrees (makes sprite spin continuously)",
+          "Repeat 4 times: move 50 steps, turn 90 degrees (draws a square)"
+        ],
+        "try_commands": [
+          "make sprite move in a square using loops",
+          "create a spinning animation",
+          "make sprite dance by repeating movements"
+        ],
+        "related": ["repeat blocks", "forever blocks", "patterns"]
+      },
+      "intermediate": {
+        "text": "Loops are control structures that repeat a set of instructions. Snap! has several types: repeat (fixed number), repeat until (condition-based), and forever (infinite). Loops are fundamental to creating efficient, readable code.",
+        "key_points": [
+          "Different loop types serve different purposes",
+          "Conditions can control when loops stop",
+          "Nested loops create complex patterns",
+          "Loops reduce code duplication"
+        ],
+        "examples": [
+          "Repeat until touching edge: move and bounce",
+          "Nested loops: repeat 4 [repeat 10 [move 10 steps] turn 90 degrees]",
+          "Forever loop with conditional: if key pressed then jump"
+        ],
+        "related": ["conditions", "nested structures", "algorithms"]
+      },
+      "advanced": {
+        "text": "Loops are iterative control structures that enable algorithmic thinking. Understanding loop invariants, termination conditions, and complexity analysis is crucial for advanced programming.",
+        "key_points": [
+          "Loop invariants maintain program correctness",
+          "Termination conditions prevent infinite loops",
+          "Time complexity often depends on loop structure",
+          "Loops enable implementation of algorithms"
+        ],
+        "examples": [
+          "Implementing sorting algorithms with nested loops",
+          "Using loops for numerical computation",
+          "Creating recursive-like behavior with loops"
+        ]
+      }
+    },
+    "events": {
+      "beginner": {
+        "text": "Events are things that happen that can start your program! Like pressing a key, clicking the mouse, or clicking the green flag. Event blocks are the hat-shaped blocks at the top of scripts - they're like the 'start button' for your code.",
+        "key_points": [
+          "Events start scripts running",
+          "Hat blocks (green, rounded top) are event blocks",
+          "Multiple scripts can respond to the same event",
+          "Events make programs interactive"
+        ],
+        "examples": [
+          "When flag clicked: starts when you click green flag",
+          "When space key pressed: starts when you press spacebar",
+          "When this sprite clicked: starts when you click the sprite",
+          "When I receive message: starts when another sprite sends a message"
+        ],
+        "try_commands": [
+          "make sprite jump when space is pressed",
+          "change color when sprite is clicked",
+          "start animation when flag is clicked"
+        ],
+        "related": ["hat blocks", "interactivity", "user input"]
+      },
+      "intermediate": {
+        "text": "Events are the foundation of event-driven programming. They allow programs to respond to user input, system changes, and inter-object communication. Understanding event handling is crucial for creating interactive applications.",
+        "key_points": [
+          "Event-driven programming responds to external stimuli",
+          "Events can be user actions or system-generated",
+          "Event handlers define responses to events",
+          "Multiple handlers can respond to the same event"
+        ],
+        "examples": [
+          "Keyboard events for game controls",
+          "Mouse events for drawing applications",
+          "Broadcast events for sprite communication",
+          "Timer events for animations"
+        ],
+        "related": ["broadcasting", "message passing", "user interfaces"]
+      }
+    },
+    "variables": {
+      "beginner": {
+        "text": "Variables are like boxes that hold information! You can put numbers, words, or other data in them and use them later. The variable's name is like a label on the box so you can find it again. You can change what's inside the box anytime you want.",
+        "key_points": [
+          "Variables store data for later use",
+          "You can change what's in a variable",
+          "Variables have names so you can find them",
+          "Use 'set' to put data in, 'change' to modify"
+        ],
+        "examples": [
+          "Set score to 0 (creates a score counter)",
+          "Change score by 10 (adds 10 to current score)",
+          "Say score (shows the current score)",
+          "Set name to 'Player' (stores text)"
+        ],
+        "try_commands": [
+          "create a score counter that increases when sprite is clicked",
+          "make a timer that counts seconds",
+          "store the player's name in a variable"
+        ],
+        "related": ["data", "memory", "counters"]
+      },
+      "intermediate": {
+        "text": "Variables are named storage locations that hold values during program execution. They enable programs to remember information, track state, and perform calculations. Understanding scope (global vs local) is important for proper variable usage.",
+        "key_points": [
+          "Variables have scope (global or local)",
+          "Data types determine what variables can store",
+          "Variable names should be descriptive",
+          "Variables enable dynamic program behavior"
+        ],
+        "examples": [
+          "Global variables shared between sprites",
+          "Local variables within custom blocks",
+          "Using variables in mathematical expressions",
+          "Variables as parameters to custom blocks"
+        ],
+        "related": ["scope", "data types", "parameters", "custom blocks"]
+      }
+    },
+    "conditions": {
+      "beginner": {
+        "text": "Conditions are like asking questions in your program! 'If this is true, then do that.' They let your sprite make decisions and do different things depending on what's happening. It's like giving your sprite a brain to think with!",
+        "key_points": [
+          "If blocks check if something is true",
+          "Programs can make decisions",
+          "Different things happen based on conditions",
+          "Conditions make programs smart and responsive"
+        ],
+        "examples": [
+          "If touching edge, then bounce",
+          "If key pressed, then jump",
+          "If score > 100, then say 'You win!'",
+          "If mouse clicked, then change color"
+        ],
+        "try_commands": [
+          "make sprite bounce only when touching the edge",
+          "change sprite color only when mouse is clicked",
+          "make sprite say different things based on score"
+        ],
+        "related": ["if blocks", "decisions", "logic"]
+      },
+      "intermediate": {
+        "text": "Conditional statements control program flow based on boolean expressions. They enable branching logic where different code paths execute based on runtime conditions. Understanding boolean logic and comparison operators is essential.",
+        "key_points": [
+          "Boolean expressions evaluate to true or false",
+          "If-else provides alternative execution paths",
+          "Nested conditions create complex decision trees",
+          "Logical operators combine multiple conditions"
+        ],
+        "examples": [
+          "If-else statements for binary decisions",
+          "Nested if statements for multiple conditions",
+          "Using AND, OR, NOT operators",
+          "Switch-like behavior with multiple if-else"
+        ],
+        "related": ["boolean logic", "comparison operators", "branching"]
+      }
+    },
+    "custom blocks": {
+      "intermediate": {
+        "text": "Custom blocks let you create your own blocks! It's like making a new tool that does exactly what you want. You can reuse it many times and make your programs easier to read. Think of it as teaching Snap! a new word that means a whole bunch of actions.",
+        "key_points": [
+          "Create reusable pieces of code",
+          "Make programs easier to understand",
+          "Can have inputs (parameters) to customize behavior",
+          "Promotes good programming practices",
+          "Reduces repetition in your code"
+        ],
+        "examples": [
+          "Make a 'draw square' block that draws any size square",
+          "Create a 'jump with sound' block that plays a sound while jumping",
+          "Build a 'move to random position' block",
+          "Design a 'change costume and size' block"
+        ],
+        "try_commands": [
+          "create a custom block for drawing shapes",
+          "make a custom block that combines movement and sound",
+          "build a custom block for complex animations"
+        ],
+        "related": ["abstraction", "functions", "parameters", "reusability"]
+      },
+      "advanced": {
+        "text": "Custom blocks implement procedural abstraction, allowing complex operations to be encapsulated and reused. They support parameters, local variables, and can return values. This enables modular programming and code organization.",
+        "key_points": [
+          "Procedural abstraction hides implementation details",
+          "Parameters enable customizable behavior",
+          "Local scope prevents variable conflicts",
+          "Return values enable functional programming patterns"
+        ],
+        "examples": [
+          "Mathematical functions with return values",
+          "Recursive custom blocks",
+          "Higher-order blocks that accept other blocks as parameters",
+          "Library blocks for common operations"
+        ],
+        "related": ["abstraction", "modularity", "parameters", "recursion"]
+      }
+    },
+    "first-class functions": {
+      "intermediate": {
+        "text": "In Snap!, blocks can be inputs to other blocks! This means you can pass blocks around like data. It's like having blocks inside blocks that can change what they do. This is a very powerful feature that makes Snap! special.",
+        "key_points": [
+          "Blocks can be inputs to other blocks",
+          "The 'for each' block takes another block as input",
+          "Custom blocks can accept block inputs",
+          "This enables powerful programming patterns",
+          "You can create blocks that work on other blocks"
+        ],
+        "examples": [
+          "for each item in list: [say item for 1 seconds]",
+          "map [multiply by 2] over [1, 2, 3, 4] = [2, 4, 6, 8]",
+          "keep items such that [item > 5] from list",
+          "Custom block that takes an action block as input"
+        ],
+        "try_commands": [
+          "use map to transform a list of numbers",
+          "create a custom block that takes another block as input",
+          "use keep to filter a list"
+        ],
+        "related": ["custom blocks", "lists", "higher-order functions", "functional programming"]
+      },
+      "advanced": {
+        "text": "First-class functions are a powerful feature where functions (blocks) are treated as data. You can store them in variables, pass them as arguments, and return them from other functions. This enables functional programming paradigms and elegant solutions to complex problems.",
+        "key_points": [
+          "Functions are values that can be manipulated",
+          "Enables functional programming patterns",
+          "Critical for advanced computer science concepts",
+          "Allows for elegant solutions to complex problems",
+          "Foundation for higher-order functions"
+        ],
+        "examples": [
+          "Creating function factories",
+          "Implementing map, filter, reduce operations",
+          "Building domain-specific languages",
+          "Callback functions for event handling"
+        ],
+        "related": ["functional programming", "higher-order functions", "lambda calculus", "closures"]
+      }
+    },
+    "lists": {
+      "intermediate": {
+        "text": "Lists are like containers that hold multiple items in order! You can put numbers, words, or even other lists inside them. Lists are great for storing collections of things like high scores, player names, or animation frames.",
+        "key_points": [
+          "Lists store multiple items in order",
+          "Items can be numbers, text, or other data",
+          "You can add, remove, and change items",
+          "Lists have positions (1st, 2nd, 3rd, etc.)",
+          "Very useful for games and data processing"
+        ],
+        "examples": [
+          "List of high scores: [100, 85, 70, 50]",
+          "List of colors: [red, blue, green, yellow]",
+          "Adding new score to end of list",
+          "Getting random item from list"
+        ],
+        "try_commands": [
+          "create a list of your favorite colors",
+          "make a sprite say random items from a list",
+          "build a simple quiz using lists"
+        ],
+        "related": ["data structures", "collections", "arrays"]
+      },
+      "advanced": {
+        "text": "Lists are fundamental data structures that enable complex data manipulation and algorithmic thinking. Understanding list operations, iteration patterns, and functional programming with lists is crucial for advanced programming.",
+        "key_points": [
+          "Lists are ordered collections with indexed access",
+          "Support functional operations like map, filter, reduce",
+          "Enable implementation of other data structures",
+          "Critical for algorithm implementation",
+          "Foundation for data processing pipelines"
+        ],
+        "examples": [
+          "Implementing sorting algorithms on lists",
+          "Using lists to represent matrices",
+          "Functional programming with list operations",
+          "Building data processing pipelines"
+        ],
+        "related": ["data structures", "algorithms", "functional programming"]
+      }
+    },
+    "broadcasting": {
+      "intermediate": {
+        "text": "Broadcasting is like sending messages between sprites! One sprite can send a message, and other sprites can listen for it and do something when they receive it. It's like having walkie-talkies between your sprites.",
+        "key_points": [
+          "Sprites can send messages to each other",
+          "Multiple sprites can respond to the same message",
+          "Messages can carry information",
+          "Great for coordinating multiple sprites",
+          "Makes complex interactions possible"
+        ],
+        "examples": [
+          "Broadcast 'game start' to begin all sprites",
+          "Send 'player scored' to update all score displays",
+          "Broadcast 'level complete' to trigger celebrations",
+          "Use messages to synchronize animations"
+        ],
+        "try_commands": [
+          "make one sprite tell another sprite to move",
+          "create a game where sprites react to broadcasts",
+          "coordinate multiple sprites with messages"
+        ],
+        "related": ["communication", "events", "coordination"]
+      }
+    },
+    "cloning": {
+      "advanced": {
+        "text": "Cloning creates copies of sprites during the program! It's like having a sprite factory that can make new sprites whenever you need them. This is very powerful for creating games with multiple enemies, bullets, or particles.",
+        "key_points": [
+          "Creates new sprite instances at runtime",
+          "Clones inherit the original sprite's properties",
+          "Each clone can act independently",
+          "Essential for dynamic game elements",
+          "Enables particle systems and effects"
+        ],
+        "examples": [
+          "Clone bullets when player shoots",
+          "Create enemy clones that spawn randomly",
+          "Generate particle effects with many clones",
+          "Build fireworks with cloned sparks"
+        ],
+        "try_commands": [
+          "create a shooting game with cloned bullets",
+          "make a particle explosion effect",
+          "build a game with spawning enemies"
+        ],
+        "related": ["object creation", "dynamic systems", "game development"]
+      }
+    }
+  }
+}

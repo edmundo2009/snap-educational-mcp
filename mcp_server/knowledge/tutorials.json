@@ -1,0 +1,323 @@
+{
+  "tutorials": {
+    "jumping_game": {
+      "title": "Build a Jumping Game",
+      "description": "Create a simple game where a sprite jumps when you press the space key",
+      "difficulty": "beginner",
+      "estimated_time": "15 minutes",
+      "prerequisites": ["basic Snap! navigation"],
+      "keywords": ["jump", "jumping", "game", "space key", "interactive"],
+      "objectives": [
+        "Learn about event blocks",
+        "Understand motion blocks",
+        "Create interactive programs",
+        "Practice connecting blocks"
+      ],
+      "overview": "In this tutorial, you'll create your first interactive Snap! program! Your sprite will jump up and down when you press the space key. This teaches you about events (things that start programs) and motion (making sprites move).",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Set up your sprite",
+          "description": "Make sure you have a sprite ready to jump. The default cat sprite works great!",
+          "instructions": [
+            "Look at the sprite area (bottom right)",
+            "You should see a cat sprite",
+            "If not, click the sprite icon to add one"
+          ],
+          "success_criteria": "You can see a sprite in the sprite area",
+          "estimated_time": "1 minute"
+        },
+        {
+          "step": 2,
+          "title": "Add the event block",
+          "description": "Every interactive program needs an event block to start it. This tells Snap! when to run your code.",
+          "code_description": "when space key pressed",
+          "instructions": [
+            "Go to the Events category (yellow blocks)",
+            "Drag 'when [space] key pressed' to the scripts area",
+            "This is called a 'hat block' because of its shape"
+          ],
+          "teaching_moment": "Event blocks are like triggers - they start your program when something happens!",
+          "success_criteria": "You have a yellow hat block in your scripts area",
+          "estimated_time": "2 minutes"
+        },
+        {
+          "step": 3,
+          "title": "Make the sprite jump up",
+          "description": "Now we'll add the motion that makes the sprite jump upward.",
+          "code_description": "change y by 50",
+          "instructions": [
+            "Go to the Motion category (blue blocks)",
+            "Drag 'change y by 10' block",
+            "Connect it under the event block",
+            "Change the number from 10 to 50"
+          ],
+          "teaching_moment": "Y coordinates control up and down movement. Positive numbers go up!",
+          "success_criteria": "Blue motion block is connected under the event block",
+          "estimated_time": "3 minutes"
+        },
+        {
+          "step": 4,
+          "title": "Add a pause",
+          "description": "We need to wait a moment before the sprite comes back down, or it will happen too fast to see!",
+          "code_description": "wait 0.3 seconds",
+          "instructions": [
+            "Go to the Control category (orange blocks)",
+            "Drag 'wait 1 seconds' block",
+            "Connect it under the motion block",
+            "Change 1 to 0.3 for a quick pause"
+          ],
+          "teaching_moment": "Wait blocks create timing in your programs. Without them, everything happens instantly!",
+          "success_criteria": "Orange wait block is connected in the sequence",
+          "estimated_time": "2 minutes"
+        },
+        {
+          "step": 5,
+          "title": "Make the sprite come back down",
+          "description": "Now we'll add the motion that brings the sprite back to its starting position.",
+          "code_description": "change y by -50",
+          "instructions": [
+            "Add another 'change y by' block",
+            "Connect it under the wait block",
+            "Change the number to -50 (negative fifty)"
+          ],
+          "teaching_moment": "Negative numbers make the sprite go down. This undoes the upward jump!",
+          "success_criteria": "Second motion block with -50 is connected",
+          "estimated_time": "2 minutes"
+        },
+        {
+          "step": 6,
+          "title": "Test your jumping game!",
+          "description": "Time to see your creation in action!",
+          "instructions": [
+            "Click the green flag to start your program",
+            "Press the space key",
+            "Watch your sprite jump!",
+            "Try pressing space multiple times"
+          ],
+          "success_criteria": "Sprite jumps when you press space key",
+          "troubleshooting": [
+            "If nothing happens: Check that blocks are connected",
+            "If sprite disappears: It might have jumped off screen - click the green flag to reset"
+          ],
+          "estimated_time": "5 minutes"
+        }
+      ],
+      "completion_message": "🎉 Congratulations! You've created your first interactive Snap! program!",
+      "what_you_learned": [
+        "Event blocks start programs when things happen",
+        "Motion blocks move sprites around the screen",
+        "Wait blocks control timing",
+        "Negative numbers reverse direction"
+      ],
+      "next_challenges": [
+        "Make the sprite jump higher or lower",
+        "Add a sound when the sprite jumps",
+        "Make the sprite change colors while jumping",
+        "Create a double-jump by pressing space twice quickly"
+      ],
+      "follow_up_tutorials": ["bouncing_ball", "sound_effects"]
+    },
+    "bouncing_ball": {
+      "title": "Create a Bouncing Ball",
+      "description": "Build a ball that bounces around the screen forever",
+      "difficulty": "beginner",
+      "estimated_time": "20 minutes",
+      "prerequisites": ["basic motion blocks", "understanding of forever loops"],
+      "keywords": ["bounce", "ball", "forever", "edge", "continuous"],
+      "objectives": [
+        "Learn about forever loops",
+        "Understand edge detection",
+        "Create continuous motion",
+        "Practice with motion blocks"
+      ],
+      "overview": "Create a ball that moves continuously and bounces off the edges of the screen. This teaches you about forever loops and edge detection.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Create a ball sprite",
+          "description": "First, we need a ball to bounce around",
+          "instructions": [
+            "Click the sprite icon to add a new sprite",
+            "Choose a ball costume or draw a circle",
+            "Make it a bright color so it's easy to see"
+          ],
+          "estimated_time": "3 minutes"
+        },
+        {
+          "step": 2,
+          "title": "Start the bouncing",
+          "description": "Add blocks to make the ball move and bounce forever",
+          "code_description": "when flag clicked, forever move 10 steps, if on edge bounce",
+          "instructions": [
+            "Add 'when flag clicked' event block",
+            "Add 'forever' loop from Control category",
+            "Inside the loop: 'move 10 steps' and 'if on edge, bounce'"
+          ],
+          "teaching_moment": "Forever loops repeat continuously until you stop the program!",
+          "estimated_time": "5 minutes"
+        },
+        {
+          "step": 3,
+          "title": "Test and adjust",
+          "description": "Run your program and adjust the speed",
+          "instructions": [
+            "Click the green flag",
+            "Watch your ball bounce!",
+            "Try different numbers for steps to change speed"
+          ],
+          "estimated_time": "12 minutes"
+        }
+      ],
+      "completion_message": "🏀 Great job! Your ball bounces around like a real bouncing ball!",
+      "what_you_learned": [
+        "Forever loops create continuous action",
+        "Edge detection prevents sprites from leaving the screen",
+        "Motion blocks can be combined with control blocks"
+      ],
+      "next_challenges": [
+        "Add multiple bouncing balls",
+        "Change the ball's color as it bounces",
+        "Make the ball leave a trail"
+      ]
+    },
+    "interactive_story": {
+      "title": "Create an Interactive Story",
+      "description": "Build a story where the user makes choices that change what happens",
+      "difficulty": "intermediate",
+      "estimated_time": "30 minutes",
+      "prerequisites": ["events", "conditions", "variables"],
+      "keywords": ["story", "interactive", "choices", "ask", "answer"],
+      "objectives": [
+        "Learn about user input",
+        "Practice with conditions",
+        "Create branching narratives",
+        "Use variables to store information"
+      ],
+      "overview": "Create a story where the user can make choices that affect the outcome. This teaches advanced concepts like user input and conditional logic.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Plan your story",
+          "description": "Think about a simple story with choices",
+          "instructions": [
+            "Decide on a theme (adventure, mystery, etc.)",
+            "Plan 2-3 choice points",
+            "Think about different endings"
+          ],
+          "estimated_time": "5 minutes"
+        },
+        {
+          "step": 2,
+          "title": "Start the story",
+          "description": "Create the opening scene",
+          "code_description": "when flag clicked, say story opening, ask for user choice",
+          "instructions": [
+            "Add 'when flag clicked' block",
+            "Use 'say' blocks to tell the story",
+            "Use 'ask' block to get user input"
+          ],
+          "estimated_time": "10 minutes"
+        },
+        {
+          "step": 3,
+          "title": "Add choices and consequences",
+          "description": "Use if blocks to create different story paths",
+          "code_description": "if answer = choice1 then do this, else do that",
+          "instructions": [
+            "Use 'if' blocks to check the user's answer",
+            "Create different story branches",
+            "Add multiple endings"
+          ],
+          "teaching_moment": "Conditions let your program make decisions based on user input!",
+          "estimated_time": "15 minutes"
+        }
+      ],
+      "completion_message": "📚 Excellent! You've created an interactive story with multiple paths!",
+      "what_you_learned": [
+        "Ask blocks get input from users",
+        "Answer block stores what the user typed",
+        "If blocks create different program paths",
+        "Stories can be interactive and dynamic"
+      ]
+    },
+    "simple_game": {
+      "title": "Build a Simple Catching Game",
+      "description": "Create a game where you catch falling objects with your sprite",
+      "difficulty": "intermediate",
+      "estimated_time": "45 minutes",
+      "prerequisites": ["variables", "cloning", "conditions", "broadcasting"],
+      "keywords": ["game", "catch", "score", "falling", "collision"],
+      "objectives": [
+        "Learn about game mechanics",
+        "Practice with collision detection",
+        "Use variables for scoring",
+        "Implement game loops"
+      ],
+      "overview": "Build a complete game where objects fall from the sky and the player tries to catch them. This combines many programming concepts into a fun project.",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Create the player sprite",
+          "description": "Set up a sprite that the player can control",
+          "instructions": [
+            "Choose or draw a player sprite",
+            "Add controls to move left and right",
+            "Test the movement"
+          ],
+          "estimated_time": "10 minutes"
+        },
+        {
+          "step": 2,
+          "title": "Create falling objects",
+          "description": "Make objects that fall from the top of the screen",
+          "code_description": "clone objects that fall down and disappear at bottom",
+          "instructions": [
+            "Create a new sprite for the falling object",
+            "Use cloning to create multiple objects",
+            "Make them fall from random positions"
+          ],
+          "estimated_time": "15 minutes"
+        },
+        {
+          "step": 3,
+          "title": "Add collision detection and scoring",
+          "description": "Detect when player catches objects and keep score",
+          "instructions": [
+            "Check if falling objects touch the player",
+            "Increase score when objects are caught",
+            "Display the score on screen"
+          ],
+          "estimated_time": "20 minutes"
+        }
+      ],
+      "completion_message": "🎮 Amazing! You've built a complete game with scoring and collision detection!",
+      "what_you_learned": [
+        "Game loops coordinate multiple game elements",
+        "Collision detection enables interaction between sprites",
+        "Variables track game state like score",
+        "Cloning creates dynamic game objects"
+      ]
+    }
+  },
+  "tutorial_sequences": {
+    "beginner_path": [
+      "jumping_game",
+      "bouncing_ball",
+      "interactive_story"
+    ],
+    "game_development": [
+      "jumping_game",
+      "bouncing_ball",
+      "simple_game"
+    ],
+    "storytelling": [
+      "interactive_story"
+    ]
+  },
+  "difficulty_progression": {
+    "beginner": ["jumping_game", "bouncing_ball"],
+    "intermediate": ["interactive_story", "simple_game"],
+    "advanced": []
+  }
+}
