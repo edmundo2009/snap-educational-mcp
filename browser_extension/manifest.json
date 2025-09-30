@@ -7,13 +7,14 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "notifications"
   ],
-  
+
   "host_permissions": [
     "https://snap.berkeley.edu/*",
     "https://extensions.snap.berkeley.edu/*",
-    "http://localhost:*"
+    "http://localhost:8080/*"
   ],
   
   "background": {

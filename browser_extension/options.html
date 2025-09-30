@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snap! Educational Assistant - Settings</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+
+        .subtitle {
+            color: #666;
+            margin: 0;
+        }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .section h2 {
+            margin: 0 0 16px 0;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .setting-group {
+            margin-bottom: 20px;
+        }
+
+        .setting-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input[type="text"], input[type="url"], select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus, input[type="url"]:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .description {
+            font-size: 13px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            margin: 0 8px;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: #6c757d;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 16px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🧩</div>
+        <h1>Snap! Educational Assistant</h1>
+        <p class="subtitle">Configure your natural language programming experience</p>
+    </div>
+
+    <div class="section">
+        <h2>🔗 Connection Settings</h2>
+        <div class="setting-group">
+            <label for="server-url">MCP Server URL:</label>
+            <input type="url" id="server-url" placeholder="ws://localhost:8080" value="ws://localhost:8080">
+            <div class="description">WebSocket URL for the MCP server that handles natural language processing</div>
+        </div>
+
+        <div class="setting-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="auto-connect" checked>
+                <label for="auto-connect">Auto-connect when visiting Snap!</label>
+            </div>
+            <div class="description">Automatically establish connection when you navigate to Snap! pages</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🎯 Assistant Behavior</h2>
+        <div class="setting-group">
+            <label for="assistance-level">Assistance Level:</label>
+            <select id="assistance-level">
+                <option value="beginner">Beginner - Detailed explanations and step-by-step guidance</option>
+                <option value="intermediate" selected>Intermediate - Balanced help with some independence</option>
+                <option value="advanced">Advanced - Minimal guidance, focus on complex concepts</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="show-notifications" checked>
+                <label for="show-notifications">Show notifications</label>
+            </div>
+            <div class="description">Display browser notifications for important events and tips</div>
+        </div>
+
+        <div class="setting-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="visual-feedback" checked>
+                <label for="visual-feedback">Enable visual feedback</label>
+            </div>
+            <div class="description">Highlight blocks and provide visual cues during assistance</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🎨 Interface</h2>
+        <div class="setting-group">
+            <label for="theme">Theme:</label>
+            <select id="theme">
+                <option value="auto" selected>Auto (follow system)</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <label for="language">Language:</label>
+            <select id="language">
+                <option value="en" selected>English</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="buttons">
+        <button id="save-settings">Save Settings</button>
+        <button id="reset-settings" class="secondary">Reset to Defaults</button>
+    </div>
+
+    <div id="status-message" class="status" style="display: none;"></div>
+
+    <script src="options.js"></script>
+</body>
+</html>
