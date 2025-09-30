@@ -179,17 +179,6 @@ python -m json.tool mcp.json
 
 ---
 
-## 📋 Checklist
-
-- [ ] MCP server starts without errors
-- [ ] `config.yml` includes correct path
-- [ ] `mcp.json` has valid JSON syntax
-- [ ] File paths use correct format for OS
-- [ ] RovoDev CLI can see MCP tools
-- [ ] Claude responds to Snap! requests
-- [ ] Browser extension connects successfully
-
----
 
 ## 🎯 Example Commands
 
@@ -209,23 +198,3 @@ Once everything is set up, try these with Claude:
 
 ---
 
-## 📞 Quick Support
-
-**Config Issues:**
-1. Check file paths are correct
-2. Verify JSON syntax is valid
-3. Restart RovoDev after changes
-
-**Connection Issues:**
-1. Start MCP server first
-2. Check firewall/antivirus
-3. Verify port 8765 is available
-
-**Runtime Issues:**
-1. Check Python version (3.8+)
-2. Verify all dependencies installed
-3. Look at server console for errors
-
----
-
-**Ready to go?** Start with: `rovodev chat` and ask Claude to create your first Snap! program! 🎉

@@ -4,7 +4,7 @@
 
 // Default settings
 const DEFAULT_SETTINGS = {
-    serverUrl: 'ws://localhost:8080',
+    serverUrl: 'ws://localhost:8765',
     autoConnect: true,
     assistanceLevel: 'intermediate',
     showNotifications: true,

@@ -221,7 +221,7 @@ def start_snap_session(user_id: str = "default") -> Dict[str, Any]:
 			# Last 8 chars, uppercase
 			"display_token": token_data["token_id"].split("-")[-1][:8].upper(),
 			"ws_url": "ws://localhost:8765",
-			"expires_in_seconds": 300,
+			"expires_in_seconds": 1800,
 			"expires_at": token_data["expires_at"],
 			"instructions": [
 				"1. Open Snap! in your browser (https://snap.berkeley.edu/snap/snap.html)",

@@ -9,6 +9,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const openOptionsButton = document.getElementById('open-options');
     const helpButton = document.getElementById('help');
 
+    // Token entry elements
+    const tokenSection = document.getElementById('token-section');
+    const showTokenButton = document.getElementById('show-token-input');
+    const tokenInput = document.getElementById('token-input');
+    const connectButton = document.getElementById('connect-btn');
+    const tokenError = document.getElementById('token-error');
+
     // Check if we're currently on a Snap! page
     async function checkSnapStatus() {
         try {
@@ -71,6 +78,81 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Error opening help:', error);
         }
     });
+
+    // Show token input handler
+    showTokenButton.addEventListener('click', () => {
+        tokenSection.style.display = tokenSection.style.display === 'none' ? 'block' : 'none';
+        if (tokenSection.style.display === 'block') {
+            tokenInput.focus();
+        }
+    });
+
+    // Token input formatting (uppercase, 8 chars max)
+    tokenInput.addEventListener('input', (e) => {
+        e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        tokenError.style.display = 'none';
+    });
+
+    // Connect button handler
+    connectButton.addEventListener('click', async () => {
+        const token = tokenInput.value.trim();
+
+        if (!token) {
+            showTokenError('Please enter a token');
+            return;
+        }
+
+        if (token.length !== 8) {
+            showTokenError('Token must be exactly 8 characters');
+            return;
+        }
+
+        try {
+            connectButton.textContent = 'Connecting...';
+            connectButton.disabled = true;
+
+            // Send token to content script
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+            if (!tab || !tab.url.includes('snap.berkeley.edu')) {
+                showTokenError('Please open Snap! first');
+                return;
+            }
+
+            // Send message to content script to connect with token
+            const response = await chrome.tabs.sendMessage(tab.id, {
+                action: 'connect_with_token',
+                token: token
+            });
+
+            if (response && response.success) {
+                statusElement.className = 'status active';
+                statusText.textContent = 'Connected to MCP Server!';
+                tokenSection.style.display = 'none';
+                tokenInput.value = '';
+                showTokenButton.textContent = '✅ Connected';
+                showTokenButton.disabled = true;
+            } else {
+                showTokenError(response?.error || 'Connection failed');
+            }
+
+        } catch (error) {
+            console.error('Connection error:', error);
+            showTokenError('Connection failed. Check console for details.');
+        } finally {
+            connectButton.textContent = 'Connect';
+            connectButton.disabled = false;
+        }
+    });
+
+    // Helper function to show token errors
+    function showTokenError(message) {
+        tokenError.textContent = message;
+        tokenError.style.display = 'block';
+        setTimeout(() => {
+            tokenError.style.display = 'none';
+        }, 5000);
+    }
 
     // Listen for tab updates to refresh status
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {

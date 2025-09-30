@@ -94,6 +94,70 @@
             font-size: 11px;
             opacity: 0.6;
         }
+
+        /* Token Entry Styles */
+        .token-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .token-header {
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .token-subtitle {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        .token-input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        #token-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            font-family: monospace;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        #token-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: none;
+        }
+
+        #connect-btn {
+            padding: 8px 16px;
+            background: rgba(76, 175, 80, 0.3);
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            font-size: 12px;
+        }
+
+        #connect-btn:hover {
+            background: rgba(76, 175, 80, 0.4);
+        }
+
+        .token-error {
+            color: #ff6b6b;
+            font-size: 11px;
+            text-align: center;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -106,9 +170,23 @@
     <div id="status" class="status inactive">
         <div id="status-text">Not connected to Snap!</div>
     </div>
-    
+
+    <!-- Token Entry Section -->
+    <div id="token-section" class="token-section" style="display: none;">
+        <div class="token-header">
+            <strong>🔑 Enter Connection Token</strong>
+            <div class="token-subtitle">Get your token from the MCP server</div>
+        </div>
+        <div class="token-input-group">
+            <input type="text" id="token-input" placeholder="Enter 8-character token" maxlength="8" style="text-transform: uppercase;">
+            <button id="connect-btn">Connect</button>
+        </div>
+        <div id="token-error" class="token-error" style="display: none;"></div>
+    </div>
+
     <div class="actions">
         <button id="open-snap">Open Snap!</button>
+        <button id="show-token-input">🔗 Connect to Server</button>
         <button id="open-options">Settings</button>
         <button id="help">Help & Tutorial</button>
     </div>

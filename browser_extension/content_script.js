@@ -48,6 +48,9 @@ class SnapContentScript {
             // Setup communication with background script
             this.setupBackgroundCommunication();
 
+            // Request bridge injection from background script
+            this.requestBridgeInjection();
+
             // Setup page event listeners
             this.setupPageEventListeners();
 
@@ -145,15 +148,28 @@ class SnapContentScript {
         try {
             console.log('📨 Content script received message:', message.type);
 
-            switch (message.type) {
+            switch (message.type || message.action) {
                 case 'inject_bridge':
                     await this.injectBridge();
                     sendResponse({ success: true });
                     break;
 
                 case 'connect_bridge':
-                    await this.connectBridge(message.token);
-                    sendResponse({ success: true });
+                case 'connect_with_token':
+                    const token = message.token;
+                    if (!token) {
+                        sendResponse({ success: false, error: 'Token is required' });
+                        break;
+                    }
+
+                    // Inject bridge first if not already done
+                    if (!this.bridgeInjected) {
+                        await this.injectBridge();
+                    }
+
+                    // Connect with token
+                    const result = await this.connectBridge(token);
+                    sendResponse({ success: result.success, error: result.error });
                     break;
 
                 case 'send_command':
@@ -167,7 +183,7 @@ class SnapContentScript {
                     break;
 
                 default:
-                    console.warn('⚠️ Unknown message type:', message.type);
+                    console.warn('⚠️ Unknown message type:', message.type || message.action);
                     sendResponse({ success: false, error: 'Unknown message type' });
             }
 
@@ -193,6 +209,21 @@ class SnapContentScript {
     }
 
     /**
+     * Request bridge injection from background script
+     */
+    requestBridgeInjection() {
+        console.log('📞 Requesting bridge injection from background script...');
+
+        // Send message to background script to inject bridge
+        chrome.runtime.sendMessage({
+            type: 'inject_bridge_request',
+            tabId: null // Background script will determine the tab
+        }).catch(error => {
+            console.error('❌ Error requesting bridge injection:', error);
+        });
+    }
+
+    /**
      * Inject bridge into page
      */
     async injectBridge() {
@@ -202,10 +233,9 @@ class SnapContentScript {
         }
 
         try {
-            console.log('💉 Injecting Snap! bridge...');
+            console.log('💉 Waiting for Snap! bridge to be ready...');
 
-            // The bridge scripts are injected by the background script
-            // We just need to wait for them to be ready
+            // Wait for bridge scripts to be injected by background script
             await this.waitForBridge();
 
             this.bridgeInjected = true;
@@ -243,7 +273,7 @@ class SnapContentScript {
      */
     async connectBridge(token) {
         if (!this.bridgeInjected || !window.snapBridge) {
-            throw new Error('Bridge not ready');
+            return { success: false, error: 'Bridge not ready. Please refresh the page.' };
         }
 
         try {
@@ -251,10 +281,11 @@ class SnapContentScript {
             await window.snapBridge.connect(token);
             this.connectionEstablished = true;
             console.log('✅ Bridge connected');
+            return { success: true };
 
         } catch (error) {
             console.error('❌ Bridge connection error:', error);
-            throw error;
+            return { success: false, error: error.message || 'Connection failed' };
         }
     }
 

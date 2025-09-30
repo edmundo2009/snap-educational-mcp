@@ -103,6 +103,15 @@ class SnapExtensionBackground {
             console.log('📨 Background received message:', message.type);
 
             switch (message.type) {
+                case 'inject_bridge_request':
+                    if (sender.tab && sender.tab.id) {
+                        await this.injectSnapBridge(sender.tab.id);
+                        sendResponse({ success: true });
+                    } else {
+                        sendResponse({ success: false, error: 'No tab information' });
+                    }
+                    break;
+
                 case 'get_connection_token':
                     const token = await this.generateConnectionToken();
                     sendResponse({ success: true, token: token });

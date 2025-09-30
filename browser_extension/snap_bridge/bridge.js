@@ -29,20 +29,21 @@ class SnapBridge {
      */
     init() {
         console.log('🚀 Initializing Snap! Educational Bridge...');
-        
-        // Check if we're in Snap! environment
-        if (!this.isSnapEnvironment()) {
-            console.error('❌ Not running in Snap! environment');
-            return;
-        }
 
-        // Set up message handlers
-        this.setupMessageHandlers();
-        
-        // Wait for Snap! to be fully loaded
-        this.waitForSnapReady().then(() => {
-            console.log('✅ Snap! is ready');
-            this.showConnectionUI();
+        // Wait for Snap! environment to be ready
+        this.waitForSnapEnvironment().then(() => {
+            console.log('✅ Snap! environment detected');
+
+            // Set up message handlers
+            this.setupMessageHandlers();
+
+            // Wait for Snap! to be fully loaded
+            this.waitForSnapReady().then(() => {
+                console.log('✅ Snap! is ready');
+                this.showConnectionUI();
+            });
+        }).catch((error) => {
+            console.error('❌ Failed to detect Snap! environment:', error);
         });
     }
 
@@ -50,9 +51,44 @@ class SnapBridge {
      * Check if we're running in Snap! environment
      */
     isSnapEnvironment() {
-        return typeof world !== 'undefined' && 
-               typeof SpriteMorph !== 'undefined' && 
-               typeof IDE_Morph !== 'undefined';
+        // Check for core Snap! objects
+        const hasWorld = typeof world !== 'undefined';
+        const hasSpriteMorph = typeof SpriteMorph !== 'undefined';
+        const hasIDEMorph = typeof IDE_Morph !== 'undefined';
+        const hasSnapURL = window.location.href.includes('snap.berkeley.edu');
+
+        // More lenient check - at least one core object + correct URL
+        return hasSnapURL && (hasWorld || hasSpriteMorph || hasIDEMorph);
+    }
+
+    /**
+     * Wait for Snap! environment to be available
+     */
+    waitForSnapEnvironment() {
+        return new Promise((resolve, reject) => {
+            // Check if already available
+            if (this.isSnapEnvironment()) {
+                resolve();
+                return;
+            }
+
+            console.log('⏳ Waiting for Snap! environment to load...');
+
+            const timeout = setTimeout(() => {
+                reject(new Error('Snap! environment detection timeout (30s)'));
+            }, 30000);
+
+            const checkEnvironment = () => {
+                if (this.isSnapEnvironment()) {
+                    clearTimeout(timeout);
+                    resolve();
+                } else {
+                    setTimeout(checkEnvironment, 500);
+                }
+            };
+
+            checkEnvironment();
+        });
     }
 
     /**
@@ -373,11 +409,15 @@ class SnapBridge {
 }
 
 // Initialize bridge when page loads
+console.log('🔧 Bridge script loaded, initializing...');
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+        console.log('📄 DOM loaded, creating SnapBridge instance');
         window.snapBridge = new SnapBridge();
     });
 } else {
+    console.log('📄 DOM already loaded, creating SnapBridge instance immediately');
     window.snapBridge = new SnapBridge();
 }
 
