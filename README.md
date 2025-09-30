@@ -48,17 +48,6 @@ This system uses a **lightweight parser approach** where:
 
 **Result:** 90% accuracy with 10x faster startup and 10x smaller footprint!
 
-## Installation
-
-See [docs/deployment_guide.md](docs/deployment_guide.md) for detailed setup instructions.
-
-## Documentation
-
-- [MCP Tool Documentation](docs/mcp_tool_docs.md)
-- [Snap! API Reference](docs/snap_api_reference.md)
-- [Educational Philosophy](docs/educational_philosophy.md)
-- [WebSocket Protocol](WebSocket%20Protocol%20Specification%20-%20SnapBridge.md)
-
 ## Project Structure
 
 ```
@@ -72,6 +61,3 @@ snap-llm-mcp/
 └── docs/               # Documentation
 ```
 
-## Development Status
-
-This is an active educational project implementing the architecture described in the PRD. See the implementation summary for current progress.

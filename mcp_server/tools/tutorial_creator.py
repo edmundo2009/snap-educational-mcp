@@ -22,7 +22,7 @@ class TutorialCreator:
         """Load tutorial templates from JSON file"""
         try:
             if os.path.exists(self.templates_path):
-                with open(self.templates_path, 'r') as f:
+                with open(self.templates_path, 'r', encoding='utf-8') as f:
                     self.tutorials_db = json.load(f)
                 print(f"✓ Loaded {len(self.tutorials_db.get('tutorials', {}))} tutorial templates")
             else:

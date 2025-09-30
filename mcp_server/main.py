@@ -866,36 +866,51 @@ if __name__ == "__main__":
 		print("❌ Failed to initialize. Check configuration and try again.")
 		sys.exit(1)
 
-	# Start WebSocket server for bridge communication
-	async def run_servers():
-		"""Run both WebSocket and MCP servers concurrently"""
+	# Check if running in STDIO mode (for RovoDev/LLM clients) or standalone mode
+	import sys
+	is_stdio_mode = not sys.stdin.isatty() or len(sys.argv) > 1 and '--stdio' in sys.argv
+
+	if is_stdio_mode:
+		# Running as STDIO MCP server (for RovoDev)
+		print("🔗 Starting in STDIO mode for MCP client communication")
 		try:
-			# Start WebSocket server
-			await bridge_communicator.start_server()
-
-			print("\n✨ Server ready! Next steps:")
-			print("1. In your terminal: llm 'start a snap session'")
-			print("2. Open Snap! in browser and install extension")
-			print("3. Enter the connection code")
-			print("4. Start creating: llm 'make sprite jump when space pressed'")
-			print("\n" + "=" * 60)
-
-			# Keep the server running
-			print("🔄 Server running... Press Ctrl+C to stop")
-			while True:
-				await asyncio.sleep(1)
-
+			mcp.run(transport="stdio")
 		except KeyboardInterrupt:
 			print("\n👋 Server stopped by user")
 		except Exception as e:
 			print(f"\n❌ Server error: {e}")
-			raise
+			sys.exit(1)
+	else:
+		# Running in standalone mode with WebSocket server (for browser extension)
+		async def run_websocket_server():
+			"""Run WebSocket server for browser extension"""
+			try:
+				# Start WebSocket server
+				await bridge_communicator.start_server()
 
-	# Run the servers
-	try:
-		asyncio.run(run_servers())
-	except KeyboardInterrupt:
-		print("\n👋 Goodbye!")
-	except Exception as e:
-		print(f"\n❌ Fatal error: {e}")
-		sys.exit(1)
+				print("\n✨ Server ready! Next steps:")
+				print("1. In your terminal: llm 'start a snap session'")
+				print("2. Open Snap! in browser and install extension")
+				print("3. Enter the connection code")
+				print("4. Start creating: llm 'make sprite jump when space pressed'")
+				print("\n" + "=" * 60)
+
+				# Keep the server running
+				print("🔄 WebSocket server running... Press Ctrl+C to stop")
+				while True:
+					await asyncio.sleep(1)
+
+			except KeyboardInterrupt:
+				print("\n👋 Server stopped by user")
+			except Exception as e:
+				print(f"\n❌ Server error: {e}")
+				raise
+
+		# Run the WebSocket server
+		try:
+			asyncio.run(run_websocket_server())
+		except KeyboardInterrupt:
+			print("\n👋 Goodbye!")
+		except Exception as e:
+			print(f"\n❌ Fatal error: {e}")
+			sys.exit(1)
