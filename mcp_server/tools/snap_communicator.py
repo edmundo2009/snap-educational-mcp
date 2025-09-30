@@ -6,7 +6,7 @@ import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import websockets
-from websockets.server import WebSocketServerProtocol
+from websockets import ServerConnection
 
 
 class SnapBridgeCommunicator:
@@ -15,14 +15,18 @@ class SnapBridgeCommunicator:
   Handles message routing, connection management, and response handling.
   """
 
-  def __init__(self, host: str = "localhost", port: int = 8765):
+  def __init__(self, host: str = "localhost", port: int = 8765, token_validator=None,
+               session_connected_callback=None, session_disconnected_callback=None):
     self.host = host
     self.port = port
     self.server = None
+    self.token_validator = token_validator  # Function to validate tokens
+    self.session_connected_callback = session_connected_callback  # Called when session connects
+    self.session_disconnected_callback = session_disconnected_callback  # Called when session disconnects
 
     # Connection management
-    # session_id -> websocket
-    self.connections: Dict[str, WebSocketServerProtocol] = {}
+    # session_id -> websocket connection
+    self.connections: Dict[str, ServerConnection] = {}
     # message_id -> future
     self.pending_responses: Dict[str, asyncio.Future] = {}
 
@@ -43,7 +47,7 @@ class SnapBridgeCommunicator:
     )
     print(f"📡 WebSocket server started on ws://{self.host}:{self.port}")
 
-  async def handle_connection(self, websocket: WebSocketServerProtocol, path: str):
+  async def handle_connection(self, websocket: ServerConnection):
     """Handle new WebSocket connection from browser extension"""
     session_id = None
 
@@ -67,17 +71,55 @@ class SnapBridgeCommunicator:
         }))
         return
 
-      # Validate token (delegated to main.py's validate_token)
+      # Validate token using the provided validator function
       token = connect_data.get("token")
-      # For now, simplified - in real implementation, validate against active_sessions
+      if not token:
+        await websocket.send(json.dumps({
+          "type": "connect_error",
+          "status": "rejected",
+          "error": {
+            "code": "MISSING_TOKEN",
+            "message": "Connection token required"
+          }
+        }))
+        return
 
-      # Extract session ID from token or assign new one
-      session_id = connect_data.get(
-        "session_id", f"sess_{uuid.uuid4().hex[:12]}")
+      # Validate token
+      if self.token_validator:
+        is_valid, error_msg = self.token_validator(token)
+        if not is_valid:
+          await websocket.send(json.dumps({
+            "type": "connect_error",
+            "status": "rejected",
+            "error": {
+              "code": "INVALID_TOKEN",
+              "message": error_msg or "Token validation failed"
+            }
+          }))
+          return
+
+      # Extract session ID from token data
+      session_id = connect_data.get("session_id")
+      if not session_id:
+        # Try to extract from token if it's a structured token
+        try:
+          import json as json_lib
+          token_parts = token.split('.')
+          if len(token_parts) >= 2:
+            # Assume it's a structured token with session info
+            session_id = f"sess_{token_parts[0][:12]}"
+          else:
+            session_id = f"sess_{uuid.uuid4().hex[:12]}"
+        except:
+          session_id = f"sess_{uuid.uuid4().hex[:12]}"
 
       # Store connection
       self.connections[session_id] = websocket
       self.stats["total_connections"] += 1
+
+      # Notify main server that session is connected
+      if self.session_connected_callback:
+        self.session_connected_callback(session_id)
 
       # Send acknowledgment
       await websocket.send(json.dumps({
@@ -105,7 +147,12 @@ class SnapBridgeCommunicator:
 
       # Handle messages
       async for message in websocket:
-        await self.handle_message(session_id, message)
+        # Convert bytes to string if needed
+        if isinstance(message, bytes):
+          message_str = message.decode('utf-8')
+        else:
+          message_str = str(message)
+        await self.handle_message(session_id, message_str)
 
     except asyncio.TimeoutError:
       print("⚠ Connection timeout")
@@ -118,6 +165,10 @@ class SnapBridgeCommunicator:
       # Cleanup
       if session_id and session_id in self.connections:
         del self.connections[session_id]
+
+        # Notify main server that session is disconnected
+        if self.session_disconnected_callback:
+          self.session_disconnected_callback(session_id)
 
   async def handle_message(self, session_id: str, message: str):
     """Handle incoming message from browser extension"""

@@ -11,15 +11,15 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Literal, Any
 from dataclasses import dataclass, asdict
 
-from mcp import FastMCP
+from mcp.server import FastMCP
 import websockets
 
 # Import our Snap! specific modules
-from tools.block_generator import SnapBlockGenerator, BlockSequence
-from tools.concept_explainer import ConceptExplainer
-from tools.tutorial_creator import TutorialCreator
-from parsers.intent_parser import SnapIntentParser, ParsedIntent
-from tools.snap_communicator import SnapBridgeCommunicator
+from .tools.block_generator import SnapBlockGenerator, BlockSequence
+from .tools.concept_explainer import ConceptExplainer
+from .tools.tutorial_creator import TutorialCreator
+from .parsers.intent_parser import SnapIntentParser, ParsedIntent
+from .tools.snap_communicator import SnapBridgeCommunicator
 
 # Initialize MCP server
 mcp = FastMCP("snap-edu")
@@ -60,10 +60,13 @@ def initialize_snap_system():
 			templates_path="knowledge/tutorials.json"
 		)
 
-		# Initialize WebSocket bridge communicator
+		# Initialize WebSocket bridge communicator with token validator and session callbacks
 		bridge_communicator = SnapBridgeCommunicator(
 			host="localhost",
-			port=8765
+			port=8765,
+			token_validator=validate_token,  # Pass our token validation function
+			session_connected_callback=mark_session_connected,  # Called when session connects
+			session_disconnected_callback=mark_session_disconnected  # Called when session disconnects
 		)
 
 		print("✓ Snap! educational system initialized")
@@ -160,6 +163,25 @@ def validate_token(token_id: str, provided_hmac: str) -> tuple[bool, Optional[st
 	session["connected"] = True
 
 	return True, None
+
+
+def mark_session_connected(session_id: str) -> bool:
+	"""Mark a session as connected when WebSocket establishes"""
+	if session_id in active_sessions:
+		active_sessions[session_id]["connected"] = True
+		active_sessions[session_id]["connected_at"] = datetime.now()
+		return True
+	return False
+
+
+def mark_session_disconnected(session_id: str) -> bool:
+	"""Mark a session as disconnected when WebSocket closes"""
+	if session_id in active_sessions:
+		active_sessions[session_id]["connected"] = False
+		active_sessions[session_id]["disconnected_at"] = datetime.now()
+		return True
+	return False
+
 
 # ============================================================================
 # MCP TOOLS - SESSION MANAGEMENT

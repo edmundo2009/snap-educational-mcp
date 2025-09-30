@@ -141,10 +141,36 @@ class SnapIntentParser:
         return intents
 
     def _split_sentences(self, text: str) -> List[str]:
-        """Split on common conjunctions"""
-        # Split on: "and", "then", comma+and, semicolon
-        parts = re.split(
-            r'\s+(?:and|then)\s+|\s*,\s*(?:and\s+)?|\s*;\s*', text)
+        """Split on common conjunctions while preserving triggers"""
+
+        # First, check if this is a trigger-action sentence
+        trigger_match = None
+        for trigger_type, patterns in self.patterns["triggers"].items():
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    trigger_match = (trigger_type, match)
+                    break
+            if trigger_match:
+                break
+
+        # Split on: "and", "then", comma (but preserve trigger context)
+        if trigger_match and ',' in text:
+            # Special handling for "when X, do Y" format
+            parts = text.split(',', 1)
+            if len(parts) == 2:
+                trigger_part = parts[0].strip()
+                action_part = parts[1].strip()
+
+                # If the action part doesn't have a trigger, prepend the trigger context
+                if not any(re.search(p, action_part, re.IGNORECASE)
+                          for patterns in self.patterns["triggers"].values()
+                          for p in patterns):
+                    # Combine trigger with action
+                    return [text]  # Keep as single sentence
+
+        # Default splitting for other cases
+        parts = re.split(r'\s+(?:and|then)\s+|\s*;\s*', text)
         return [p.strip() for p in parts if p.strip()]
 
     def _parse_sentence(self, text: str) -> Optional[ParsedIntent]:

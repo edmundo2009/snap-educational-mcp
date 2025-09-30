@@ -189,24 +189,90 @@ class SnapBlockGenerator:
 
     def _generate_blocks_for_intent(self, intent: ParsedIntent, complexity: str) -> List[SnapBlock]:
         """Generate blocks for a single intent"""
-        
+        blocks = []
+
+        # CRITICAL: If intent has a trigger, create the appropriate hat block first
+        if intent.trigger:
+            hat_block = self._create_hat_block_for_trigger(intent.trigger, intent.parameters)
+            if hat_block:
+                blocks.append(hat_block)
+
         # Check if this matches a known pattern
         pattern = self._find_matching_pattern(intent.action)
         if pattern:
-            return self._create_blocks_from_pattern(pattern, intent)
-        
+            action_blocks = self._create_blocks_from_pattern(pattern, intent)
+            blocks.extend(action_blocks)
+            return blocks
+
         # Try to create individual block
         block_def = self._find_block_definition(intent.action)
         if block_def:
-            return [self._create_block_from_definition(block_def, intent)]
-        
+            action_blocks = [self._create_block_from_definition(block_def, intent)]
+            blocks.extend(action_blocks)
+            return blocks
+
         # Fallback: create a simple say block
-        return [SnapBlock(
+        fallback_block = SnapBlock(
             opcode="doSay",
             category=BlockCategory.LOOKS,
             inputs={"MESSAGE": f"I want to {intent.action}"},
             description=f"Says '{intent.action}'"
-        )]
+        )
+        blocks.append(fallback_block)
+
+        return blocks
+
+    def _create_hat_block_for_trigger(self, trigger: str, parameters: Dict[str, Any]) -> Optional[SnapBlock]:
+        """Create the appropriate hat block for a trigger"""
+        trigger_lower = trigger.lower()
+
+        # Map triggers to Snap! hat blocks
+        if "key_press" in trigger_lower or "key" in trigger_lower:
+            key = parameters.get("key", "space")
+            return SnapBlock(
+                opcode="receiveKey",
+                category=BlockCategory.EVENTS,
+                inputs={"KEY_OPTION": key},
+                description=f"When {key} key pressed",
+                is_hat_block=True
+            )
+
+        elif "sprite_click" in trigger_lower or "clicked" in trigger_lower:
+            return SnapBlock(
+                opcode="receiveClick",
+                category=BlockCategory.EVENTS,
+                inputs={},
+                description="When this sprite clicked",
+                is_hat_block=True
+            )
+
+        elif "flag_click" in trigger_lower or "flag" in trigger_lower:
+            return SnapBlock(
+                opcode="receiveGo",
+                category=BlockCategory.EVENTS,
+                inputs={},
+                description="When green flag clicked",
+                is_hat_block=True
+            )
+
+        elif "broadcast" in trigger_lower:
+            message = parameters.get("message", "message1")
+            return SnapBlock(
+                opcode="receiveMessage",
+                category=BlockCategory.EVENTS,
+                inputs={"MSG": message},
+                description=f"When I receive {message}",
+                is_hat_block=True
+            )
+
+        # Default: green flag for unknown triggers
+        return SnapBlock(
+            opcode="receiveGo",
+            category=BlockCategory.EVENTS,
+            inputs={},
+            description="When green flag clicked",
+            is_hat_block=True
+        )
 
     def _find_matching_pattern(self, action: str) -> Optional[Dict[str, Any]]:
         """Find a pattern that matches the action"""
