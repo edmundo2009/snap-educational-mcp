@@ -1,10 +1,6 @@
 # Snap! Educational MCP System
 
-An educational programming system where children can describe what they want in natural language via terminal LLM, which uses MCP tools to generate and execute Snap! blocks programmatically.
-
-## Vision Statement
-
-**"Kids describe programs in English, LLM translates intent, MCP orchestrates execution, and Snap! blocks appear automatically in the browser."**
+**"describe programs in English, LLM translates intent, MCP orchestrates execution, and Snap! blocks appear automatically in the browser."**
 
 ## Quick Start
 

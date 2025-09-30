@@ -122,16 +122,6 @@ chmod +x run_mcp.sh
 
 ### Install RovoDev CLI
 
-1. **Download and Install**
-   - Visit [RovoDev CLI releases](https://github.com/rovodev/cli/releases)
-   - Download for your platform
-   - Follow installation instructions
-
-2. **Verify Installation**
-   ```bash
-   rovodev --version
-   ```
-
 ### Configure MCP Server
 
 1. **Create/Edit `config.yml`**

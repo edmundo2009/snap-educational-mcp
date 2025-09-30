@@ -15,11 +15,11 @@ from mcp.server import FastMCP
 import websockets
 
 # Import our Snap! specific modules
-from .tools.block_generator import SnapBlockGenerator, BlockSequence
-from .tools.concept_explainer import ConceptExplainer
-from .tools.tutorial_creator import TutorialCreator
-from .parsers.intent_parser import SnapIntentParser, ParsedIntent
-from .tools.snap_communicator import SnapBridgeCommunicator
+from mcp_server.tools.block_generator import SnapBlockGenerator, BlockSequence
+from mcp_server.tools.concept_explainer import ConceptExplainer
+from mcp_server.tools.tutorial_creator import TutorialCreator
+from mcp_server.parsers.intent_parser import SnapIntentParser, ParsedIntent
+from mcp_server.tools.snap_communicator import SnapBridgeCommunicator
 
 # Initialize MCP server
 mcp = FastMCP("snap-edu")
@@ -50,14 +50,14 @@ def initialize_snap_system():
 		# Initialize knowledge-driven components
 		parser = SnapIntentParser()
 		generator = SnapBlockGenerator(
-			knowledge_path="knowledge/snap_blocks.json",
-			patterns_path="knowledge/patterns.json"
+			knowledge_path="mcp_server/knowledge/snap_blocks.json",
+			patterns_path="mcp_server/knowledge/patterns.json"
 		)
 		explainer = ConceptExplainer(
-			concepts_path="knowledge/concepts.json"
+			concepts_path="mcp_server/knowledge/concepts.json"
 		)
 		tutorial_creator = TutorialCreator(
-			templates_path="knowledge/tutorials.json"
+			templates_path="mcp_server/knowledge/tutorials.json"
 		)
 
 		# Initialize WebSocket bridge communicator with token validator and session callbacks
@@ -867,22 +867,35 @@ if __name__ == "__main__":
 		sys.exit(1)
 
 	# Start WebSocket server for bridge communication
-	asyncio.get_event_loop().run_until_complete(
-		bridge_communicator.start_server()
-	)
+	async def run_servers():
+		"""Run both WebSocket and MCP servers concurrently"""
+		try:
+			# Start WebSocket server
+			await bridge_communicator.start_server()
 
-	print("\n✨ Server ready! Next steps:")
-	print("1. In your terminal: llm 'start a snap session'")
-	print("2. Open Snap! in browser and install extension")
-	print("3. Enter the connection code")
-	print("4. Start creating: llm 'make sprite jump when space pressed'")
-	print("\n" + "=" * 60)
+			print("\n✨ Server ready! Next steps:")
+			print("1. In your terminal: llm 'start a snap session'")
+			print("2. Open Snap! in browser and install extension")
+			print("3. Enter the connection code")
+			print("4. Start creating: llm 'make sprite jump when space pressed'")
+			print("\n" + "=" * 60)
 
-	# Run MCP server
+			# Keep the server running
+			print("🔄 Server running... Press Ctrl+C to stop")
+			while True:
+				await asyncio.sleep(1)
+
+		except KeyboardInterrupt:
+			print("\n👋 Server stopped by user")
+		except Exception as e:
+			print(f"\n❌ Server error: {e}")
+			raise
+
+	# Run the servers
 	try:
-		mcp.run(transport="stdio")
+		asyncio.run(run_servers())
 	except KeyboardInterrupt:
-		print("\n👋 Server stopped by user")
+		print("\n👋 Goodbye!")
 	except Exception as e:
-		print(f"\n❌ Server error: {e}")
+		print(f"\n❌ Fatal error: {e}")
 		sys.exit(1)
