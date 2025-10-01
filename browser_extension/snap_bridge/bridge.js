@@ -20,6 +20,10 @@ class SnapBridge {
         this.pendingMessages = new Map();
         this.messageId = 0;
 
+        // Command queue and readiness flag
+        this.isSnapFullyReady = false;
+        this.commandQueue = [];
+
         // Initialize components
         this.apiWrapper = new SnapAPIWrapper();
         this.blockCreator = new SnapBlockCreator(this.apiWrapper);
@@ -41,14 +45,89 @@ class SnapBridge {
             // Set up message handlers
             this.setupMessageHandlers();
 
-            // Wait for Snap! to be fully loaded
-            this.waitForSnapReady().then(() => {
-                console.log('✅ Snap! is ready');
-                this.showConnectionUI();
-            });
+            // Start polling for true readiness
+            this.pollForSnapReadiness();
+
+            // Show the UI immediately so the user can connect in parallel
+            this.showConnectionUI();
+
         }).catch((error) => {
             console.error('❌ Failed to detect Snap! environment:', error);
         });
+    }
+
+    // Poll for Snap readiness using the unified check
+    pollForSnapReadiness() {
+        const readinessInterval = setInterval(() => {
+            if (this.apiWrapper.isReady()) {
+                clearInterval(readinessInterval);
+                console.log('✅✅ Snap! IDE is fully loaded and ready for commands.');
+                this.isSnapFullyReady = true;
+                this.processCommandQueue();
+            } else {
+                console.log('⏳ Snap! not fully ready, checking again in 200ms...');
+            }
+        }, 200);
+
+        // Add a timeout to prevent infinite loops
+        setTimeout(() => {
+            if (!this.isSnapFullyReady) {
+                clearInterval(readinessInterval);
+                console.error('❌ Timed out waiting for Snap! to become fully ready.');
+            }
+        }, 45000); // 45-second timeout
+    }
+
+    // Process queued commands
+    processCommandQueue() {
+        console.log(`⚙️ Processing ${this.commandQueue.length} queued commands...`);
+        while (this.commandQueue.length > 0) {
+            const commandMessage = this.commandQueue.shift();
+            this.executeCommand(commandMessage);
+        }
+    }
+
+    // Execute a command (logic from handleCommand)
+    async executeCommand(message) {
+        try {
+            let result;
+            switch (message.command) {
+                case 'create_blocks':
+                    result = await this.blockCreator.createBlocks(message.payload);
+                    break;
+                case 'read_project':
+                    result = await this.apiWrapper.readProject(message.payload);
+                    break;
+                case 'execute_script':
+                    result = await this.apiWrapper.executeScript(message.payload);
+                    break;
+                case 'inspect_state':
+                    result = await this.apiWrapper.inspectState(message.payload);
+                    break;
+                case 'delete_blocks':
+                    result = await this.blockCreator.deleteBlocks(message.payload);
+                    break;
+                case 'create_custom_block':
+                    result = await this.blockCreator.createCustomBlock(message.payload);
+                    break;
+                case 'highlight_blocks':
+                    result = await this.visualFeedback.highlightBlocks(message.payload);
+                    break;
+                case 'export_project':
+                    result = await this.apiWrapper.exportProject(message.payload);
+                    break;
+                default:
+                    throw new Error(`Unknown command: ${message.command}`);
+            }
+            this.sendResponse(message.message_id, 'success', result);
+        } catch (error) {
+            console.error('❌ Command execution error:', error);
+            this.sendResponse(message.message_id, 'error', {
+                code: 'COMMAND_FAILED',
+                message: error.message,
+                details: error.stack
+            });
+        }
     }
 
     /**
@@ -294,50 +373,12 @@ class SnapBridge {
      * Handle incoming commands
      */
     async handleCommand(message) {
-      // Add this logging line
-      console.log(`BRIDGE: Executing command '${message.command}' with payload:`, message.payload);
-      try {
-          let result;
-            
-            switch (message.command) {
-                case 'create_blocks':
-                    result = await this.blockCreator.createBlocks(message.payload);
-                    break;
-                case 'read_project':
-                    result = await this.apiWrapper.readProject(message.payload);
-                    break;
-                case 'execute_script':
-                    result = await this.apiWrapper.executeScript(message.payload);
-                    break;
-                case 'inspect_state':
-                    result = await this.apiWrapper.inspectState(message.payload);
-                    break;
-                case 'delete_blocks':
-                    result = await this.blockCreator.deleteBlocks(message.payload);
-                    break;
-                case 'create_custom_block':
-                    result = await this.blockCreator.createCustomBlock(message.payload);
-                    break;
-                case 'highlight_blocks':
-                    result = await this.visualFeedback.highlightBlocks(message.payload);
-                    break;
-                case 'export_project':
-                    result = await this.apiWrapper.exportProject(message.payload);
-                    break;
-                default:
-                    throw new Error(`Unknown command: ${message.command}`);
-            }
-            
-            // Send success response
-            this.sendResponse(message.message_id, 'success', result);
-            
-        } catch (error) {
-            console.error('❌ Command error:', error);
-            this.sendResponse(message.message_id, 'error', {
-                code: 'COMMAND_FAILED',
-                message: error.message,
-                details: error.stack
-            });
+        console.log(`BRIDGE: Received command '${message.command}'. Ready state: ${this.isSnapFullyReady}`);
+        if (this.isSnapFullyReady) {
+            this.executeCommand(message);
+        } else {
+            console.log(' M queuing command until Snap! is ready.');
+            this.commandQueue.push(message);
         }
     }
 
@@ -461,18 +502,43 @@ class SnapBridge {
     }
 }
 
-// Initialize bridge when page loads
-console.log('🔧 Bridge script loaded, initializing...');
+// --- LEAVE THE ENTIRE SnapBridge CLASS DEFINITION AS IS ---
+// The class logic is fine. We are only changing HOW and WHEN it gets created.
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log('📄 DOM loaded, creating SnapBridge instance');
-        window.snapBridge = new SnapBridge();
-    });
-} else {
-    console.log('📄 DOM already loaded, creating SnapBridge instance immediately');
-    window.snapBridge = new SnapBridge();
+// --- DELETE OR COMMENT OUT THE OLD INITIALIZATION LOGIC AT THE BOTTOM ---
+// (see above)
+
+// --- ADD THIS NEW INITIALIZATION LOGIC AT THE VERY END OF THE FILE ---
+
+console.log('🔧 Bridge script parsed. Waiting for Snap initialization signal...');
+
+/**
+ * This function will be called when the Snap! environment is confirmed to be ready.
+ */
+function initializeBridge() {
+    console.log('✅ SnapIsReadyEvent received. Initializing the SnapBridge.');
+    // Use a global flag to prevent re-initialization.
+    if (!window.snapBridgeInstance) {
+        window.snapBridgeInstance = new SnapBridge();
+
+        // Listen for connection requests relayed from the content script.
+        window.addEventListener('message', (event) => {
+            // Basic security: only accept messages from this window.
+            if (event.source !== window || !event.data) {
+                return;
+            }
+
+            const { type, action, token } = event.data;
+            if (type === 'FROM_CONTENT_SCRIPT' && action === 'connect') {
+                console.log('🔌 Bridge received connection token from content script.');
+                window.snapBridgeInstance.connect(token);
+            }
+        });
+    }
 }
+
+// Listen for the custom event fired by page_world_script.js
+window.addEventListener('SnapIsReadyEvent', initializeBridge, { once: true });
 
 // Store reference to prevent duplicate loading
 window.SnapBridge = SnapBridge;
@@ -482,4 +548,4 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = SnapBridge;
 }
 
-} // End of duplicate loading protection
+} // Close the initial if-statement that checks for SnapBridge

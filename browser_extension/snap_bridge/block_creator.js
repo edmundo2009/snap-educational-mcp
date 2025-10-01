@@ -38,21 +38,8 @@ class SnapBlockCreator {
         return this.apiWrapper.getStage();
     }
 
-    /**
-     * Check if Snap! environment is ready
-     */
-    isSnapReady() {
-        try {
-            const ide = this.apiWrapper.getIDE();
-            return ide &&
-                   typeof ide.currentSprite !== 'undefined' &&
-                   ide.sprites &&
-                   typeof ide.sprites.detect === 'function';
-        } catch (error) {
-            console.warn('Snap! readiness check failed:', error);
-            return false;
-        }
-    }
+
+    // REMOVED isSnapReady method; use apiWrapper.isReady instead
 
     /**
      * Get or set current sprite
@@ -80,52 +67,39 @@ class SnapBlockCreator {
      * Create blocks from specification
      */
     async createBlocks(payload) {
-        // Check if Snap! environment is ready
-        if (!this.isSnapReady()) {
+        // Check if Snap! environment is ready using the unified check
+        if (!this.apiWrapper.isReady()) {
             throw new Error('Snap! environment is not ready. Please wait for Snap! to fully load and try again.');
         }
 
         try {
             const { target_sprite, scripts, visual_feedback } = payload;
-            
-            // Get target sprite
+            // ...existing code...
+            // (rest of method unchanged)
             const sprite = this.getCurrentSprite(target_sprite);
             const scriptsArea = sprite.scripts;
-            
             let totalBlocksCreated = 0;
             let scriptsCreated = 0;
             const createdBlockIds = [];
-            
-            // Process each script
             for (const scriptSpec of scripts) {
                 const { script_id, position, blocks } = scriptSpec;
-                
                 if (!blocks || blocks.length === 0) {
                     continue;
                 }
-                
-                // Create the script
                 const scriptBlocks = await this.createScript(blocks, position);
                 totalBlocksCreated += scriptBlocks.length;
                 scriptsCreated++;
-                
-                // Add block IDs
                 scriptBlocks.forEach(block => {
                     if (block.blockId) {
                         createdBlockIds.push(block.blockId);
                     }
                 });
-                
-                // Add visual feedback if requested
                 if (visual_feedback && visual_feedback.animate_creation) {
                     await this.animateBlockCreation(scriptBlocks, visual_feedback);
                 }
             }
-            
-            // Refresh the IDE
             this.getIDE().flushBlocksCache();
             this.getIDE().refreshPalette();
-            
             return {
                 status: 'success',
                 blocks_created: totalBlocksCreated,
@@ -138,7 +112,6 @@ class SnapBlockCreator {
                     total_scripts: sprite.scripts.children.length
                 }
             };
-            
         } catch (error) {
             console.error('Block creation error:', error);
             throw error;

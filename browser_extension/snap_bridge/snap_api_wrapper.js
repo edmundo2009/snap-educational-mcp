@@ -19,13 +19,33 @@ class SnapAPIWrapper {
     }
 
     /**
-     * Get the current IDE instance
+     * Get the current IDE instance.
+     * This is now robust against timing issues by actively searching for the IDE_Morph.
      */
     getIDE() {
-        if (!this.ide) {
-            this.ide = world.children[0];
+        // If we've already found and cached the IDE, return it immediately.
+        if (this.ide) {
+            return this.ide;
         }
-        return this.ide;
+
+        // If the core 'world' object or its 'children' array doesn't exist yet, we can't proceed.
+        if (typeof world === 'undefined' || !world.children || typeof world.children.find !== 'function') {
+            return null;
+        }
+
+        // THE CRITICAL CHANGE: Instead of assuming world.children[0],
+        // we search for the object that is actually an instance of IDE_Morph.
+        const ideInstance = world.children.find(child => child instanceof IDE_Morph);
+
+        if (ideInstance) {
+            // Log this success message once for debugging.
+            if (!this.ide) {
+                console.log('💡 SnapAPIWrapper: Found and cached the IDE_Morph instance successfully!');
+            }
+            this.ide = ideInstance; // Cache the found instance for all future calls.
+        }
+
+        return this.ide; // This will return the instance, or null if it hasn't been found yet.
     }
 
     /**
@@ -38,6 +58,7 @@ class SnapAPIWrapper {
         return this.stage;
     }
 
+
     /**
      * Get Snap! version
      */
@@ -47,6 +68,36 @@ class SnapAPIWrapper {
         } catch (error) {
             return 'unknown';
         }
+    }
+
+    /**
+     * Enhanced readiness check with granular diagnostic logging (Gemini3 recommendation)
+     */
+    isReady() {
+        const ide = this.getIDE();
+
+        // Use a series of checks that provide clear debug output.
+        if (!ide) {
+            console.log('isReady Check: Waiting for IDE_Morph instance...');
+            return false;
+        }
+        if (!ide.stage) {
+            console.log('isReady Check: IDE found, but waiting for ide.stage...');
+            return false;
+        }
+        if (!ide.sprites || typeof ide.sprites.asArray !== 'function') {
+            console.log('isReady Check: Stage found, but waiting for ide.sprites to be a valid collection...');
+            return false;
+        }
+        // This is a great final check to ensure the sprite list is populated.
+        const defaultSprite = ide.sprites.asArray().find(s => s.name === 'Sprite');
+        if (!defaultSprite) {
+            console.log("isReady Check: Sprites collection found, but waiting for the default 'Sprite' to be initialized.");
+            return false;
+        }
+
+        // If we passed all checks, we are ready.
+        return true;
     }
 
     /**
