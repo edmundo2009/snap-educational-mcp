@@ -56,78 +56,57 @@ class SnapBridgeCommunicator:
   async def handle_connection(self, websocket: ServerConnection):
     """Handle new WebSocket connection from browser extension"""
     session_id = None
+    client_ip = websocket.remote_address
+
+    print(f"🔌 New connection attempt from {client_ip}")
 
     try:
-      # Wait for connection message with token
-      print(f"🔍 Waiting for connection message from client...")
-      connect_msg = await asyncio.wait_for(
-        websocket.recv(),
-        timeout=10.0
-      )
-
-      print(f"📨 Received message: {connect_msg}")
+      # 1. Receive and parse the initial message
+      print(f"[{client_ip}] Waiting for 'connect' message...")
+      connect_msg = await asyncio.wait_for(websocket.recv(), timeout=10.0)
       connect_data = json.loads(connect_msg)
-      print(f"📋 Parsed data: {connect_data}")
+      print(f"[{client_ip}] Received data: {connect_data}")
 
+      # 2. Validate message type
       if connect_data.get("type") != "connect":
-        await websocket.send(json.dumps({
-          "type": "connect_error",
-          "status": "rejected",
-          "error": {
-            "code": "INVALID_MESSAGE",
-            "message": "Expected connection message"
-          }
-        }))
+        await websocket.close(1002, "Protocol Error: Expected 'connect' message.")
+        print(f"[{client_ip}] ❌ Rejected: Did not send 'connect' message first.")
         return
 
-      # Validate token using the provided validator function
+      # 3. Validate token
       token = connect_data.get("token")
       if not token:
-        await websocket.send(json.dumps({
-          "type": "connect_error",
-          "status": "rejected",
-          "error": {
-            "code": "MISSING_TOKEN",
-            "message": "Connection token required"
-          }
-        }))
+        await websocket.close(1002, "Protocol Error: Missing token.")
+        print(f"[{client_ip}] ❌ Rejected: Missing token.")
         return
 
-      # Validate token
+      print(f"[{client_ip}] Validating token: {token[:8]}...")
       if self.token_validator:
-        is_valid, error_msg = self.token_validator(token)
-        if not is_valid:
-          await websocket.send(json.dumps({
-            "type": "connect_error",
-            "status": "rejected",
-            "error": {
-              "code": "INVALID_TOKEN",
-              "message": error_msg or "Token validation failed"
-            }
-          }))
-          return
-
-      # Extract session ID from token data
-      session_id = connect_data.get("session_id")
-      if not session_id:
-        # Try to find session by display token
-        from mcp_server.main import find_session_by_display_token
-        session_id = find_session_by_display_token(token)
-
+        # Here we assume token_validator finds the session_id
+        session_id, error_msg = self.token_validator(token)
         if not session_id:
-          # If still no session found, create a new one (fallback)
-          session_id = f"sess_{uuid.uuid4().hex[:12]}"
-          print(f"⚠️ No session found for token {token[:8]}, created new session: {session_id}")
+          await websocket.close(1008, f"Invalid Token: {error_msg}")
+          print(f"[{client_ip}] ❌ Rejected: Token validation failed - {error_msg}")
+          return
+      else:
+        # Fallback if no validator is provided (not recommended for production)
+        import uuid
+        session_id = f"sess_dev_{uuid.uuid4().hex[:8]}"
 
-      # Store connection
+      print(f"[{client_ip}] ✅ Token validated. Session ID: {session_id}")
+
+      # 4. Store connection and notify server
       self.connections[session_id] = websocket
       self.stats["total_connections"] += 1
+      print(f"[{client_ip}] Session '{session_id}' connection stored.")
 
-      # Notify main server that session is connected
       if self.session_connected_callback:
+        print(f"[{client_ip}] Firing session_connected_callback for '{session_id}'...")
         self.session_connected_callback(session_id)
+        print(f"[{client_ip}] ✅ session_connected_callback completed.")
 
-      # Send acknowledgment
+      # 5. Send acknowledgment to the client
+      print(f"[{client_ip}] Sending 'connect_ack' to client for session '{session_id}'...")
       await websocket.send(json.dumps({
         "type": "connect_ack",
         "status": "accepted",
@@ -148,33 +127,39 @@ class SnapBridgeCommunicator:
         },
         "keep_alive_interval": 30000
       }))
+      print(f"[{client_ip}] ✅ 'connect_ack' sent. Connection fully established for '{session_id}'.")
 
-      print(f"✓ Browser connected: {session_id}")
-
-      # Handle messages
+      # 6. Begin main message handling loop
       async for message in websocket:
-        # Convert bytes to string if needed
         if isinstance(message, bytes):
           message_str = message.decode('utf-8')
         else:
           message_str = str(message)
         await self.handle_message(session_id, message_str)
 
+    except json.JSONDecodeError:
+      print(f"[{client_ip}] ❌ Connection closed: Invalid JSON.")
+      await websocket.close(1002, "Protocol Error: Invalid JSON")
     except asyncio.TimeoutError:
-      print("⚠ Connection timeout")
-    except websockets.exceptions.ConnectionClosed:
-      print(f"✓ Connection closed: {session_id}")
+      print(f"[{client_ip}] ❌ Connection closed: Timeout waiting for connect message.")
+      await websocket.close(1008, "Timeout")
+    except websockets.exceptions.ConnectionClosed as e:
+      print(f"[{client_ip}] 🔌 Connection closed normally (Code: {e.code}, Reason: {e.reason})")
     except Exception as e:
-      print(f"✗ Connection error: {e}")
+      # This will now catch any unexpected errors with a full traceback
+      import traceback
+      print(f"[{client_ip}] ❌ UNEXPECTED ERROR in connection handler for session '{session_id}': {e}")
+      traceback.print_exc()
+      await websocket.close(1011, "Internal Server Error")
       self.stats["errors"] += 1
     finally:
       # Cleanup
       if session_id and session_id in self.connections:
+        print(f"[{client_ip}] Cleaning up connection for session '{session_id}'...")
         del self.connections[session_id]
-
-        # Notify main server that session is disconnected
         if self.session_disconnected_callback:
           self.session_disconnected_callback(session_id)
+        print(f"[{client_ip}] Cleanup complete for session '{session_id}'.")
 
   async def handle_message(self, session_id: str, message: str):
     """Handle incoming message from browser extension"""

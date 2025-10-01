@@ -10,5 +10,20 @@
     "created_at": "2025-10-01T05:57:33.510196",
     "expires_at": "2025-10-01T06:27:33.510196",
     "connected": false
+  },
+  "sess_c7676b65d6a3": {
+    "token": "snap-mcp-d29c9ec0-1ec1-4347-9460-ad0b0092e9e0",
+    "created_at": "2025-10-01T06:45:21.297585",
+    "expires_at": "2025-10-01T07:15:21.297585",
+    "connected": false,
+    "connected_at": "2025-10-01T15:47:02.422445",
+    "disconnected_at": "2025-10-01T15:47:02.436580"
+  },
+  "sess_a9e1a4ce1f5e": {
+    "token": "snap-mcp-f1acc193-886b-49c9-86c0-a4729bcdb15d",
+    "created_at": "2025-10-01T06:53:50.634267",
+    "expires_at": "2025-10-01T07:23:50.634267",
+    "connected": true,
+    "connected_at": "2025-10-01T15:54:35.862051"
   }
 }

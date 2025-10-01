@@ -91,36 +91,40 @@ class SnapContentScript {
     }
 
     /**
-     * Wait for Snap! to be fully loaded
+     * Wait for Snap! to be fully loaded using a more robust method.
      */
     async waitForSnap() {
         return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 20; // 10 seconds max wait
+            // First, do a quick check in case it's already loaded
+            if (window.world && window.world.children[0] && window.world.children[0].stage) {
+                console.log('✅ Snap! was already ready.');
+                resolve();
+                return;
+            }
 
-            const checkSnap = () => {
-                attempts++;
-                console.log(`🔍 Checking Snap! readiness (attempt ${attempts}/${maxAttempts})...`);
-                console.log('  - world:', typeof world !== 'undefined');
-                console.log('  - SpriteMorph:', typeof SpriteMorph !== 'undefined');
-                console.log('  - IDE_Morph:', typeof IDE_Morph !== 'undefined');
+            const timeout = setTimeout(() => {
+                console.warn('⚠️ Snap! readiness detection timed out after 20 seconds. Proceeding anyway.');
+                observer.disconnect(); // Stop observing
+                resolve();
+            }, 20000); // 20 second timeout
 
-                if (typeof world !== 'undefined' &&
-                    typeof SpriteMorph !== 'undefined' &&
-                    typeof IDE_Morph !== 'undefined' &&
-                    world.children &&
-                    world.children[0] &&
-                    world.children[0].stage) {
-                    console.log('✅ Snap! is fully ready');
+            // The 'stage' canvas is one of the last things to be added.
+            // We will watch for it to appear in the DOM.
+            const observer = new MutationObserver((mutations, obs) => {
+                const stageCanvas = document.querySelector('canvas.world');
+                if (stageCanvas && window.IDE_Morph) {
+                    console.log('✅ Snap! is fully ready (detected via MutationObserver).');
+                    clearTimeout(timeout); // Clear the timeout
+                    obs.disconnect(); // Stop observing
                     resolve();
-                } else if (attempts >= maxAttempts) {
-                    console.warn('⚠️ Snap! not fully ready after timeout, proceeding anyway...');
-                    resolve(); // Don't fail, just proceed
-                } else {
-                    setTimeout(checkSnap, 500);
                 }
-            };
-            checkSnap();
+            });
+
+            console.log('⏳ Waiting for Snap! to load (using MutationObserver)...');
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
         });
     }
 

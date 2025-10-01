@@ -56,14 +56,14 @@ This leverages Snap!'s superior scripting capabilities to create a seamless natu
 ## Why Snap! Instead of Scratch?
 
 ### Technical Superiority
-| Feature | Scratch | Snap! | Impact |
-|---------|---------|-------|--------|
-| **JavaScript API** | ❌ No scripting | ✅ Full DOM access | Direct block creation |
-| **Programmatic Control** | ❌ File export only | ✅ Real-time manipulation | Live automation |
-| **First-Class Functions** | ❌ Limited | ✅ Full lambda support | Advanced concepts |
-| **Custom Blocks** | ❌ Manual only | ✅ Scriptable creation | Dynamic curriculum |
-| **XML Manipulation** | ❌ Limited | ✅ Direct DOM access | Precise control |
-| **Extension System** | ❌ Restricted | ✅ Open architecture | Easy integration |
+| Feature                   | Scratch            | Snap!                    | Impact                |
+|---------------------------|--------------------|--------------------------|-----------------------|
+| **JavaScript API**        | ❌ No scripting     | ✅ Full DOM access        | Direct block creation |
+| **Programmatic Control**  | ❌ File export only | ✅ Real-time manipulation | Live automation       |
+| **First-Class Functions** | ❌ Limited          | ✅ Full lambda support    | Advanced concepts     |
+| **Custom Blocks**         | ❌ Manual only      | ✅ Scriptable creation    | Dynamic curriculum    |
+| **XML Manipulation**      | ❌ Limited          | ✅ Direct DOM access      | Precise control       |
+| **Extension System**      | ❌ Restricted       | ✅ Open architecture      | Easy integration      |
 
 ### Educational Advantages
 - **Berkeley pedigree**: Created by CS education experts
@@ -587,70 +587,6 @@ snap-llm-mcp/
     ├── deployment_guide.md
     └── educational_philosophy.md
 ```
-
----
-
-## Success Metrics
-
-### Technical Metrics
-- **Response Time**: <2s from terminal input to block creation
-- **Accuracy**: >95% correct block generation for common patterns
-- **Reliability**: >99% uptime for bridge connection
-- **Coverage**: 100+ Snap! blocks supported
-
-### Educational Metrics
-- **Comprehension**: Kids understand generated code 90%+ of time
-- **Independence**: Can create programs without adult help
-- **Progression**: Advance through curriculum at appropriate pace
-- **Engagement**: Return to use system repeatedly
-
-### User Experience Metrics
-- **Setup Time**: <5 minutes from install to first block
-- **Error Recovery**: Kids can resolve issues without frustration
-- **Delight Factor**: "Wow!" moments when blocks appear
-- **Learning Transfer**: Skills apply to manual Snap! programming
-
----
-
-## Risk Mitigation
-
-### Technical Risks
-| Risk                  | Impact | Probability | Mitigation                         |
-|-----------------------|--------|-------------|------------------------------------|
-| Snap! API changes     | High   | Medium      | Version locking, abstraction layer |
-| WebSocket instability | Medium | Low         | HTTP fallback, reconnection logic  |
-| Browser compatibility | Medium | Medium      | Test on Chrome, Firefox, Safari    |
-| Performance issues    | Low    | Low         | Throttling, batch operations       |
-
-### Educational Risks
-| Risk                      | Impact | Probability | Mitigation                                       |
-|---------------------------|--------|-------------|--------------------------------------------------|
-| Too complex for kids      | High   | Medium      | Progressive disclosure, age-appropriate language |
-| Bypasses learning         | High   | Medium      | Explanations mandatory, tutorial mode            |
-| Incorrect code generation | Medium | Medium      | Validation, preview mode                         |
-| Frustration from errors   | Medium | High        | Clear error messages, examples                   |
-
----
-
-## Competitive Advantages
-
-### vs. Traditional Scratch
-- ✅ Real-time block creation (no export/import)
-- ✅ Advanced programming concepts
-- ✅ Scriptable automation
-- ✅ Academic rigor
-
-### vs. Text-Based Programming
-- ✅ Visual feedback
-- ✅ No syntax errors
-- ✅ Immediate gratification
-- ✅ Kid-friendly
-
-### vs. Other Block Platforms
-- ✅ Natural language interface
-- ✅ LLM-powered assistance
-- ✅ Personalized learning
-- ✅ Terminal-based (appealing to older kids)
 
 ---
 

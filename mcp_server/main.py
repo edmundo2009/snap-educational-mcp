@@ -192,52 +192,28 @@ def find_session_by_display_token(display_token: str) -> Optional[str]:
 	return None
 
 
-def validate_token(token_data, provided_hmac=None) -> tuple[bool, Optional[str]]:
-	"""Validate token and return (is_valid, error_message)"""
+def validate_token(display_token: str) -> tuple[Optional[str], Optional[str]]:
+	"""Validate token and return (session_id, error_message)"""
+	session_id = find_session_by_display_token(display_token)
 
-	# Handle simple string tokens (for testing/development)
-	if isinstance(token_data, str):
-		# For development, accept any non-empty token
-		if token_data.strip():
-			print(f"🔑 Accepting development token: {token_data[:8]}...")
-			return True, None
-		else:
-			return False, "Empty token provided"
+	if not session_id:
+		return None, "Session not found for this token."
 
-	# Handle structured token data (production)
-	token_id = token_data if isinstance(token_data, str) else token_data.get("token_id")
+	# Reload sessions to get latest data
+	global active_sessions
+	active_sessions = load_sessions()
 
-	if not token_id:
-		return False, "Invalid token format"
+	if session_id not in active_sessions:
+		return None, "Session not found for this token."
 
-	# Check if token already used
-	if token_id in used_tokens:
-		return False, "Token has already been used"
-
-	# Find session with this token
-	session = None
-	session_id = None
-	for sid, sess_data in active_sessions.items():
-		if sess_data["token"] == token_id:
-			session = sess_data
-			session_id = sid
-			break
-
-	if not session:
-		return False, "Token not found"
+	session = active_sessions[session_id]
 
 	# Check expiration
 	if datetime.utcnow() > session["expires_at"]:
-		return False, "Token has expired"
+		return None, "Token has expired."
 
-	# Validate HMAC (simplified - full version would recreate signature)
-	# In production, reconstruct token data and verify signature
-
-	# Mark token as used
-	used_tokens.add(token_id)
-	session["connected"] = True
-
-	return True, None
+	# The token is valid, return the full session_id
+	return session_id, None
 
 
 def mark_session_connected(session_id: str) -> bool:
