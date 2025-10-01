@@ -13,7 +13,11 @@ if (typeof window.SnapBlockCreator !== 'undefined') {
  */
 
 class SnapBlockCreator {
-    constructor() {
+    constructor(apiWrapper) {
+        if (!apiWrapper) {
+            throw new Error("SnapBlockCreator requires an instance of SnapAPIWrapper.");
+        }
+        this.apiWrapper = apiWrapper;
         this.ide = null;
         this.stage = null;
         this.currentSprite = null;
@@ -24,28 +28,38 @@ class SnapBlockCreator {
      * Get the current IDE instance
      */
     getIDE() {
-        if (!this.ide) {
-            this.ide = world.children[0];
-        }
-        return this.ide;
+        return this.apiWrapper.getIDE();
     }
 
     /**
      * Get the current stage
      */
     getStage() {
-        if (!this.stage) {
-            this.stage = this.getIDE().stage;
+        return this.apiWrapper.getStage();
+    }
+
+    /**
+     * Check if Snap! environment is ready
+     */
+    isSnapReady() {
+        try {
+            const ide = this.apiWrapper.getIDE();
+            return ide &&
+                   typeof ide.currentSprite !== 'undefined' &&
+                   ide.sprites &&
+                   typeof ide.sprites.detect === 'function';
+        } catch (error) {
+            console.warn('Snap! readiness check failed:', error);
+            return false;
         }
-        return this.stage;
     }
 
     /**
      * Get or set current sprite
      */
     getCurrentSprite(spriteName = null) {
-        const ide = this.getIDE();
-        
+        const ide = this.apiWrapper.getIDE();
+
         if (spriteName) {
             // Find sprite by name
             const sprite = ide.sprites.detect(s => s.name === spriteName);
@@ -58,7 +72,7 @@ class SnapBlockCreator {
         } else {
             this.currentSprite = ide.currentSprite;
         }
-        
+
         return this.currentSprite;
     }
 
@@ -66,6 +80,11 @@ class SnapBlockCreator {
      * Create blocks from specification
      */
     async createBlocks(payload) {
+        // Check if Snap! environment is ready
+        if (!this.isSnapReady()) {
+            throw new Error('Snap! environment is not ready. Please wait for Snap! to fully load and try again.');
+        }
+
         try {
             const { target_sprite, scripts, visual_feedback } = payload;
             

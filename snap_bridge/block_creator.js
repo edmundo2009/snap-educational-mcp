@@ -8,7 +8,11 @@
  */
 
 class SnapBlockCreator {
-    constructor() {
+    constructor(apiWrapper) {
+        if (!apiWrapper) {
+            throw new Error("SnapBlockCreator requires an instance of SnapAPIWrapper.");
+        }
+        this.apiWrapper = apiWrapper;
         this.ide = null;
         this.stage = null;
         this.currentSprite = null;

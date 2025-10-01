@@ -1,5 +1,4 @@
 // snap_bridge/bridge.js - Main Snap! Bridge for MCP Communication
-
 // Prevent duplicate loading
 if (typeof window.SnapBridge !== 'undefined') {
     console.log('⚠️ SnapBridge already loaded, skipping...');
@@ -22,8 +21,8 @@ class SnapBridge {
         this.messageId = 0;
 
         // Initialize components
-        this.blockCreator = new SnapBlockCreator();
         this.apiWrapper = new SnapAPIWrapper();
+        this.blockCreator = new SnapBlockCreator(this.apiWrapper);
         this.visualFeedback = new VisualFeedback();
 
         this.init();
