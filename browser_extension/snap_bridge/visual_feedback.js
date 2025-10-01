@@ -1,8 +1,13 @@
 // snap_bridge/visual_feedback.js - Visual Feedback and Animations
 
+// Prevent duplicate loading
+if (typeof window.VisualFeedback !== 'undefined') {
+    console.log('⚠️ VisualFeedback already loaded, skipping...');
+} else {
+
 /**
  * VisualFeedback
- * 
+ *
  * Provides visual feedback, animations, and educational hints
  * when blocks are created or manipulated.
  */
@@ -497,7 +502,12 @@ class VisualFeedback {
     }
 }
 
+// Store reference to prevent duplicate loading
+window.VisualFeedback = VisualFeedback;
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = VisualFeedback;
 }
+
+} // End of duplicate loading protection

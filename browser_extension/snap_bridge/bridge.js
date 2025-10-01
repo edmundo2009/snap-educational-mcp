@@ -1,26 +1,31 @@
 // snap_bridge/bridge.js - Main Snap! Bridge for MCP Communication
 
+// Prevent duplicate loading
+if (typeof window.SnapBridge !== 'undefined') {
+    console.log('⚠️ SnapBridge already loaded, skipping...');
+} else {
+
 /**
  * Snap! Educational Bridge
- * 
+ *
  * This is the main bridge that connects the MCP server to the Snap! IDE.
  * It handles WebSocket communication, block creation, and visual feedback.
  */
 
 class SnapBridge {
     constructor() {
-        this.websocket = null;
+        this.websocketClient = null;
         this.isConnected = false;
         this.sessionId = null;
         this.messageHandlers = new Map();
         this.pendingMessages = new Map();
         this.messageId = 0;
-        
+
         // Initialize components
         this.blockCreator = new SnapBlockCreator();
         this.apiWrapper = new SnapAPIWrapper();
         this.visualFeedback = new VisualFeedback();
-        
+
         this.init();
     }
 
@@ -169,30 +174,43 @@ class SnapBridge {
      */
     async connect(token) {
         try {
+            // Prevent duplicate connections
+            if (this.websocketClient && this.websocketClient.isConnected) {
+                console.log('⚠️ Already connected to MCP server, skipping connection attempt');
+                return;
+            }
+
             console.log('🔌 Connecting to MCP server...');
-            
-            this.websocket = new WebSocket('ws://localhost:8765');
-            
-            this.websocket.onopen = () => {
-                console.log('✅ WebSocket connected');
-                this.sendConnectionRequest(token);
-            };
-            
-            this.websocket.onmessage = (event) => {
-                this.handleMessage(JSON.parse(event.data));
-            };
-            
-            this.websocket.onclose = () => {
-                console.log('🔌 WebSocket disconnected');
-                this.isConnected = false;
-                this.showReconnectUI();
-            };
-            
-            this.websocket.onerror = (error) => {
-                console.error('❌ WebSocket error:', error);
-                this.showErrorUI('Connection failed. Make sure MCP server is running.');
-            };
-            
+
+            // Initialize WebSocket client if not already done
+            if (!this.websocketClient) {
+                this.websocketClient = new WebSocketClient('ws://localhost:8765');
+
+                // Set up event handlers
+                this.websocketClient.on('connected', () => {
+                    console.log('✅ WebSocket connected via client');
+                    this.isConnected = true;
+                });
+
+                this.websocketClient.on('disconnected', (event) => {
+                    console.log('🔌 WebSocket disconnected via client:', event);
+                    this.isConnected = false;
+                    this.showReconnectUI();
+                });
+
+                this.websocketClient.on('error', (error) => {
+                    console.error('❌ WebSocket error via client:', error);
+                    this.showErrorUI('Connection failed. Make sure MCP server is running.');
+                });
+
+                this.websocketClient.on('message', (message) => {
+                    this.handleMessage(message);
+                });
+            }
+
+            // Connect with token
+            await this.websocketClient.connect(token);
+
         } catch (error) {
             console.error('❌ Connection error:', error);
             this.showErrorUI('Failed to connect to server.');
@@ -214,8 +232,10 @@ class SnapBridge {
                 timestamp: new Date().toISOString()
             }
         };
-        
-        this.websocket.send(JSON.stringify(message));
+
+        if (this.websocketClient) {
+            this.websocketClient.send(message);
+        }
     }
 
     /**
@@ -328,7 +348,9 @@ class SnapBridge {
             timestamp: new Date().toISOString(),
             latency_ms: Date.now() - new Date(message.timestamp).getTime()
         };
-        this.websocket.send(JSON.stringify(pong));
+        if (this.websocketClient) {
+            this.websocketClient.send(pong);
+        }
     }
 
     /**
@@ -342,9 +364,9 @@ class SnapBridge {
             timestamp: new Date().toISOString(),
             payload: payload
         };
-        
-        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-            this.websocket.send(JSON.stringify(response));
+
+        if (this.websocketClient && this.websocketClient.isConnected) {
+            this.websocketClient.send(response);
         }
     }
 
@@ -406,6 +428,35 @@ class SnapBridge {
             }
         }, 5000);
     }
+
+    /**
+     * Pause heartbeat (when page is hidden)
+     */
+    pauseHeartbeat() {
+        if (this.websocketClient) {
+            this.websocketClient.pauseHeartbeat();
+        }
+    }
+
+    /**
+     * Resume heartbeat (when page is visible)
+     */
+    resumeHeartbeat() {
+        if (this.websocketClient) {
+            this.websocketClient.resumeHeartbeat();
+        }
+    }
+
+    /**
+     * Get connection status
+     */
+    getConnectionStatus() {
+        return {
+            connected: this.websocketClient?.isConnected || false,
+            session_id: this.sessionId,
+            server_url: this.serverUrl
+        };
+    }
 }
 
 // Initialize bridge when page loads
@@ -421,7 +472,12 @@ if (document.readyState === 'loading') {
     window.snapBridge = new SnapBridge();
 }
 
+// Store reference to prevent duplicate loading
+window.SnapBridge = SnapBridge;
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = SnapBridge;
 }
+
+} // End of duplicate loading protection

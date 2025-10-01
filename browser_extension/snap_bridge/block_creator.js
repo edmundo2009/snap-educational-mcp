@@ -1,8 +1,13 @@
 // snap_bridge/block_creator.js - Snap! Block Creation and Manipulation
 
+// Prevent duplicate loading
+if (typeof window.SnapBlockCreator !== 'undefined') {
+    console.log('⚠️ SnapBlockCreator already loaded, skipping...');
+} else {
+
 /**
  * SnapBlockCreator
- * 
+ *
  * Handles the creation, manipulation, and deletion of Snap! blocks
  * using the Snap! internal APIs.
  */
@@ -396,7 +401,12 @@ class SnapBlockCreator {
     }
 }
 
+// Store reference to prevent duplicate loading
+window.SnapBlockCreator = SnapBlockCreator;
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = SnapBlockCreator;
 }
+
+} // End of duplicate loading protection

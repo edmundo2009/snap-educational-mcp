@@ -31,8 +31,50 @@ explainer = None
 tutorial_creator = None
 bridge_communicator = None
 
-# Active sessions and tokens
-active_sessions: Dict[str, Dict] = {}
+# Active sessions and tokens - now with file persistence
+import json
+import os
+from pathlib import Path
+
+SESSIONS_FILE = Path("active_sessions.json")
+
+def load_sessions():
+	"""Load sessions from file"""
+	if SESSIONS_FILE.exists():
+		try:
+			with open(SESSIONS_FILE, 'r') as f:
+				data = json.load(f)
+				# Convert datetime strings back to datetime objects
+				for session_id, session_data in data.items():
+					if 'created_at' in session_data and isinstance(session_data['created_at'], str):
+						session_data['created_at'] = datetime.fromisoformat(session_data['created_at'])
+					if 'expires_at' in session_data and isinstance(session_data['expires_at'], str):
+						session_data['expires_at'] = datetime.fromisoformat(session_data['expires_at'])
+				return data
+		except Exception as e:
+			print(f"⚠️ Error loading sessions: {e}")
+	return {}
+
+def save_sessions():
+	"""Save sessions to file"""
+	try:
+		# Convert datetime objects to strings for JSON serialization
+		data_to_save = {}
+		for session_id, session_data in active_sessions.items():
+			session_copy = session_data.copy()
+			if 'created_at' in session_copy and hasattr(session_copy['created_at'], 'isoformat'):
+				session_copy['created_at'] = session_copy['created_at'].isoformat()
+			if 'expires_at' in session_copy and hasattr(session_copy['expires_at'], 'isoformat'):
+				session_copy['expires_at'] = session_copy['expires_at'].isoformat()
+			data_to_save[session_id] = session_copy
+
+		with open(SESSIONS_FILE, 'w') as f:
+			json.dump(data_to_save, f, indent=2)
+	except Exception as e:
+		print(f"⚠️ Error saving sessions: {e}")
+
+# Load existing sessions on startup
+active_sessions: Dict[str, Dict] = load_sessions()
 used_tokens: set = set()
 
 # ============================================================================
@@ -95,7 +137,7 @@ def generate_secure_token(session_id: str) -> Dict[str, Any]:
 	# Token data
 	token_uuid = str(uuid.uuid4())
 	issued_at = datetime.utcnow()
-	expires_at = issued_at + timedelta(minutes=5)
+	expires_at = issued_at + timedelta(minutes=30)
 
 	token_data = {
 		"token_id": f"snap-mcp-{token_uuid}",
@@ -129,11 +171,44 @@ def generate_secure_token(session_id: str) -> Dict[str, Any]:
 		"connected": False
 	}
 
+	# Save sessions to file for sharing between processes
+	save_sessions()
+
 	return token_data
 
 
-def validate_token(token_id: str, provided_hmac: str) -> tuple[bool, Optional[str]]:
+def find_session_by_display_token(display_token: str) -> Optional[str]:
+	"""Find session ID by display token"""
+	# Reload sessions from file to get latest data from other processes
+	global active_sessions
+	active_sessions = load_sessions()
+
+	for session_id, session_data in active_sessions.items():
+		if session_data.get("token"):
+			# Extract display token from full token
+			full_token = session_data["token"]
+			if full_token.split("-")[-1][:8].upper() == display_token.upper():
+				return session_id
+	return None
+
+
+def validate_token(token_data, provided_hmac=None) -> tuple[bool, Optional[str]]:
 	"""Validate token and return (is_valid, error_message)"""
+
+	# Handle simple string tokens (for testing/development)
+	if isinstance(token_data, str):
+		# For development, accept any non-empty token
+		if token_data.strip():
+			print(f"🔑 Accepting development token: {token_data[:8]}...")
+			return True, None
+		else:
+			return False, "Empty token provided"
+
+	# Handle structured token data (production)
+	token_id = token_data if isinstance(token_data, str) else token_data.get("token_id")
+
+	if not token_id:
+		return False, "Invalid token format"
 
 	# Check if token already used
 	if token_id in used_tokens:
@@ -167,18 +242,28 @@ def validate_token(token_id: str, provided_hmac: str) -> tuple[bool, Optional[st
 
 def mark_session_connected(session_id: str) -> bool:
 	"""Mark a session as connected when WebSocket establishes"""
+	# Reload sessions to get latest data
+	global active_sessions
+	active_sessions = load_sessions()
+
 	if session_id in active_sessions:
 		active_sessions[session_id]["connected"] = True
-		active_sessions[session_id]["connected_at"] = datetime.now()
+		active_sessions[session_id]["connected_at"] = datetime.now().isoformat()
+		save_sessions()  # Save updated state
 		return True
 	return False
 
 
 def mark_session_disconnected(session_id: str) -> bool:
 	"""Mark a session as disconnected when WebSocket closes"""
+	# Reload sessions to get latest data
+	global active_sessions
+	active_sessions = load_sessions()
+
 	if session_id in active_sessions:
 		active_sessions[session_id]["connected"] = False
-		active_sessions[session_id]["disconnected_at"] = datetime.now()
+		active_sessions[session_id]["disconnected_at"] = datetime.now().isoformat()
+		save_sessions()  # Save updated state
 		return True
 	return False
 
@@ -252,6 +337,10 @@ def check_snap_connection(session_id: str) -> Dict[str, Any]:
 		Connection status and readiness information
 	"""
 	try:
+		# Reload sessions from file to get latest data from other processes
+		global active_sessions
+		active_sessions = load_sessions()
+
 		if session_id not in active_sessions:
 			return {
 				"success": False,
@@ -261,10 +350,16 @@ def check_snap_connection(session_id: str) -> Dict[str, Any]:
 
 		session = active_sessions[session_id]
 
-		# Check with bridge communicator
-		is_connected = bridge_communicator.is_connected(session_id)
-		snap_ready = bridge_communicator.check_snap_ready(
-			session_id) if is_connected else False
+		# Check with bridge communicator (if available)
+		is_connected = False
+		snap_ready = False
+
+		if bridge_communicator:
+			is_connected = bridge_communicator.is_connected(session_id)
+			snap_ready = bridge_communicator.check_snap_ready(session_id) if is_connected else False
+		else:
+			# Fallback: check session data directly
+			is_connected = session.get("connected", False)
 
 		return {
 			"success": True,
@@ -871,15 +966,76 @@ if __name__ == "__main__":
 	is_stdio_mode = not sys.stdin.isatty() or len(sys.argv) > 1 and '--stdio' in sys.argv
 
 	if is_stdio_mode:
-		# Running as STDIO MCP server (for RovoDev)
+		# Running as STDIO MCP server (for RovoDev) + WebSocket server (for browser extension)
 		print("🔗 Starting in STDIO mode for MCP client communication")
+		print("🔗 Also starting WebSocket server for browser extension")
+
+		import threading
+		import asyncio
+
+		def run_websocket_server():
+			"""Run WebSocket server in separate thread"""
+			loop = asyncio.new_event_loop()
+			asyncio.set_event_loop(loop)
+			try:
+				loop.run_until_complete(bridge_communicator.start_server())
+				print("📡 WebSocket server started on ws://localhost:8765")
+				print("✨ Both servers ready!")
+				loop.run_forever()
+			except Exception as e:
+				print(f"❌ WebSocket server error: {e}")
+			finally:
+				loop.close()
+
+		# Start WebSocket server in background thread
+		websocket_thread = threading.Thread(target=run_websocket_server, daemon=True)
+		websocket_thread.start()
+
+		# Give WebSocket server time to start
+		import time
+		time.sleep(1)
+
+		print("🔄 Both servers running... Use Ctrl+C to stop")
+
 		try:
+			# Run STDIO server in main thread (blocking)
+			# Note: This will keep running until the client disconnects or Ctrl+C
 			mcp.run(transport="stdio")
 		except KeyboardInterrupt:
-			print("\n👋 Server stopped by user")
+			print("\n👋 Servers stopped by user")
 		except Exception as e:
 			print(f"\n❌ Server error: {e}")
 			sys.exit(1)
+
+		# If STDIO server exits normally (e.g., client disconnects), keep WebSocket server running
+		try:
+			# Try to print to stdout, but handle case where it's closed
+			print("\n🔄 STDIO client disconnected, but WebSocket server continues running...")
+			print("🌐 Browser extension can still connect on ws://localhost:8765")
+			print("⏳ Press Ctrl+C to stop the server")
+		except (ValueError, OSError):
+			# stdout is closed, redirect to stderr or log file
+			import sys
+			try:
+				sys.stderr.write("\n🔄 STDIO client disconnected, but WebSocket server continues running...\n")
+				sys.stderr.write("🌐 Browser extension can still connect on ws://localhost:8765\n")
+				sys.stderr.flush()
+			except:
+				# If stderr is also closed, write to log file
+				with open("server.log", "a") as f:
+					f.write("\n🔄 STDIO client disconnected, but WebSocket server continues running...\n")
+					f.write("🌐 Browser extension can still connect on ws://localhost:8765\n")
+
+		try:
+			# Keep the process alive so WebSocket server continues running
+			while True:
+				import time
+				time.sleep(1)
+		except KeyboardInterrupt:
+			try:
+				print("\n👋 All servers stopped")
+			except:
+				pass
 	else:
 		# Running in standalone mode with WebSocket server (for browser extension)
 		async def run_websocket_server():

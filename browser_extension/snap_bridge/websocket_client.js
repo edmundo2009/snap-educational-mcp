@@ -1,8 +1,13 @@
 // snap_bridge/websocket_client.js - WebSocket Client for MCP Communication
 
+// Prevent duplicate loading
+if (typeof window.WebSocketClient !== 'undefined') {
+    console.log('⚠️ WebSocketClient already loaded, skipping...');
+} else {
+
 /**
  * WebSocketClient
- * 
+ *
  * Handles WebSocket communication with the MCP server,
  * including connection management, message queuing, and reconnection logic.
  */
@@ -49,8 +54,14 @@ class WebSocketClient {
      */
     async connect(token) {
         try {
+            // Prevent duplicate connections
+            if (this.isConnected || this.websocket) {
+                console.log('⚠️ Already connected or connecting, skipping connection attempt');
+                return;
+            }
+
             console.log(`🔌 Connecting to ${this.url}...`);
-            
+
             this.websocket = new WebSocket(this.url);
             
             this.websocket.onopen = () => {
@@ -58,18 +69,22 @@ class WebSocketClient {
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
                 this.reconnectDelay = 1000;
-                
-                // Send connection request
-                this.sendConnectionRequest(token);
-                
-                // Start heartbeat
-                this.startHeartbeat();
-                
-                // Process queued messages
-                this.processMessageQueue();
-                
-                // Notify handlers
-                this.emit('connected');
+
+                // Wait a moment for the connection to be fully established
+                setTimeout(() => {
+                    console.log('🔄 WebSocket fully ready, sending connection request...');
+                    // Send connection request
+                    this.sendConnectionRequest(token);
+
+                    // Start heartbeat
+                    this.startHeartbeat();
+
+                    // Process queued messages
+                    this.processMessageQueue();
+
+                    // Notify handlers
+                    this.emit('connected');
+                }, 100); // Small delay to ensure connection is fully ready
             };
             
             this.websocket.onmessage = (event) => {
@@ -130,7 +145,8 @@ class WebSocketClient {
                 timestamp: new Date().toISOString()
             }
         };
-        
+
+        console.log('📤 Sending connection request:', message);
         this.send(message);
     }
 
@@ -149,9 +165,18 @@ class WebSocketClient {
      * Send message
      */
     send(message) {
-        if (this.isConnected && this.websocket.readyState === WebSocket.OPEN) {
+        console.log('📡 Attempting to send message:', message);
+        console.log('📊 Connection state:', {
+            isConnected: this.isConnected,
+            readyState: this.websocket?.readyState,
+            OPEN: WebSocket.OPEN
+        });
+
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            console.log('✅ Sending message immediately');
             this.websocket.send(JSON.stringify(message));
         } else {
+            console.log('⏳ Queueing message for later (readyState:', this.websocket?.readyState, ')');
             // Queue message for later
             this.messageQueue.push(message);
         }
@@ -219,6 +244,9 @@ class WebSocketClient {
             case 'ping':
                 this.handlePing(message);
                 break;
+            case 'pong':
+                this.handlePong(message);
+                break;
             case 'command':
                 this.handleCommand(message);
                 break;
@@ -258,6 +286,14 @@ class WebSocketClient {
             latency_ms: Date.now() - new Date(message.timestamp).getTime()
         };
         this.send(pong);
+    }
+
+    /**
+     * Handle pong message
+     */
+    handlePong(message) {
+        // Pong received - connection is healthy
+        console.log('🏓 Pong received, connection healthy');
     }
 
     /**
@@ -332,6 +368,13 @@ class WebSocketClient {
     }
 
     /**
+     * Pause heartbeat (when page is hidden)
+     */
+    pauseHeartbeat() {
+        this.stopHeartbeat();
+    }
+
+    /**
      * Resume heartbeat (when page is visible)
      */
     resumeHeartbeat() {
@@ -391,7 +434,12 @@ class WebSocketClient {
     }
 }
 
+// Store reference to prevent duplicate loading
+window.WebSocketClient = WebSocketClient;
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = WebSocketClient;
 }
+
+} // End of duplicate loading protection

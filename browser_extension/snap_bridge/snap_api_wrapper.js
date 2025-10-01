@@ -1,8 +1,13 @@
 // snap_bridge/snap_api_wrapper.js - Snap! API Wrapper and Utilities
 
+// Prevent duplicate loading
+if (typeof window.SnapAPIWrapper !== 'undefined') {
+    console.log('⚠️ SnapAPIWrapper already loaded, skipping...');
+} else {
+
 /**
  * SnapAPIWrapper
- * 
+ *
  * Provides high-level wrapper functions for Snap! internal APIs
  * and utilities for reading project state and executing scripts.
  */
@@ -511,7 +516,12 @@ class SnapAPIWrapper {
     }
 }
 
+// Store reference to prevent duplicate loading
+window.SnapAPIWrapper = SnapAPIWrapper;
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = SnapAPIWrapper;
 }
+
+} // End of duplicate loading protection

@@ -113,9 +113,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Send token to content script
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            console.log('🔍 Current tab:', tab);
 
             if (!tab || !tab.url.includes('snap.berkeley.edu')) {
                 showTokenError('Please open Snap! first');
+                return;
+            }
+
+            console.log('📤 Sending message to content script:', { action: 'connect_with_token', token: token });
+
+            // Check if content script is ready (with timeout)
+            try {
+                const pingPromise = chrome.tabs.sendMessage(tab.id, { action: 'ping' });
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Ping timeout')), 3000)
+                );
+
+                const readyCheck = await Promise.race([pingPromise, timeoutPromise]);
+                console.log('🏓 Content script ping response:', readyCheck);
+            } catch (pingError) {
+                console.warn('⚠️ Content script not responding to ping:', pingError);
+                showTokenError('Extension not ready. Please refresh the Snap! page and try again.');
                 return;
             }
 
@@ -124,6 +142,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 action: 'connect_with_token',
                 token: token
             });
+
+            console.log('📥 Response from content script:', response);
 
             if (response && response.success) {
                 statusElement.className = 'status active';

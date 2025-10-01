@@ -43,7 +43,13 @@ class SnapBridgeCommunicator:
     self.server = await websockets.serve(
       self.handle_connection,
       self.host,
-      self.port
+      self.port,
+      ping_interval=20,
+      ping_timeout=10,
+      close_timeout=10,
+      max_size=2**20,  # 1MB max message size
+      max_queue=32,    # Max queued messages
+      compression=None  # Disable compression for debugging
     )
     print(f"📡 WebSocket server started on ws://{self.host}:{self.port}")
 
@@ -53,12 +59,15 @@ class SnapBridgeCommunicator:
 
     try:
       # Wait for connection message with token
+      print(f"🔍 Waiting for connection message from client...")
       connect_msg = await asyncio.wait_for(
         websocket.recv(),
         timeout=10.0
       )
 
+      print(f"📨 Received message: {connect_msg}")
       connect_data = json.loads(connect_msg)
+      print(f"📋 Parsed data: {connect_data}")
 
       if connect_data.get("type") != "connect":
         await websocket.send(json.dumps({
@@ -101,17 +110,14 @@ class SnapBridgeCommunicator:
       # Extract session ID from token data
       session_id = connect_data.get("session_id")
       if not session_id:
-        # Try to extract from token if it's a structured token
-        try:
-          import json as json_lib
-          token_parts = token.split('.')
-          if len(token_parts) >= 2:
-            # Assume it's a structured token with session info
-            session_id = f"sess_{token_parts[0][:12]}"
-          else:
-            session_id = f"sess_{uuid.uuid4().hex[:12]}"
-        except:
+        # Try to find session by display token
+        from mcp_server.main import find_session_by_display_token
+        session_id = find_session_by_display_token(token)
+
+        if not session_id:
+          # If still no session found, create a new one (fallback)
           session_id = f"sess_{uuid.uuid4().hex[:12]}"
+          print(f"⚠️ No session found for token {token[:8]}, created new session: {session_id}")
 
       # Store connection
       self.connections[session_id] = websocket

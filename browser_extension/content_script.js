@@ -2,10 +2,15 @@
 
 /**
  * Content Script for Snap! Educational Assistant
- * 
+ *
  * Runs on Snap! pages and coordinates between the page and the extension.
  * Handles bridge initialization and communication setup.
  */
+
+// Prevent duplicate loading
+if (typeof window.SnapContentScript !== 'undefined') {
+    console.log('⚠️ SnapContentScript already loaded, skipping...');
+} else {
 
 class SnapContentScript {
     constructor() {
@@ -34,6 +39,8 @@ class SnapContentScript {
      */
     async setup() {
         try {
+            console.log('🔄 Starting content script setup...');
+
             // Check if we're on a Snap! page
             if (!this.isSnapPage()) {
                 console.log('⚠️ Not on a Snap! page, content script inactive');
@@ -43,22 +50,35 @@ class SnapContentScript {
             console.log('✅ On Snap! page, setting up educational assistant');
 
             // Wait for Snap! to load
+            console.log('⏳ Waiting for Snap! to load...');
             await this.waitForSnap();
+            console.log('✅ Snap! loaded successfully');
 
             // Setup communication with background script
+            console.log('🔧 Setting up background communication...');
             this.setupBackgroundCommunication();
+            console.log('✅ Background communication setup complete');
 
             // Request bridge injection from background script
+            console.log('📞 Requesting bridge injection...');
             this.requestBridgeInjection();
+            console.log('✅ Bridge injection requested');
 
             // Setup page event listeners
+            console.log('👂 Setting up page event listeners...');
             this.setupPageEventListeners();
+            console.log('✅ Page event listeners setup complete');
 
             // Show ready indicator
+            console.log('🎯 Showing ready indicator...');
             this.showReadyIndicator();
+            console.log('✅ Ready indicator shown');
+
+            console.log('🎉 Content script setup completed successfully!');
 
         } catch (error) {
             console.error('❌ Content script setup error:', error);
+            throw error; // Re-throw to be caught by the promise handler
         }
     }
 
@@ -74,16 +94,28 @@ class SnapContentScript {
      * Wait for Snap! to be fully loaded
      */
     async waitForSnap() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 20; // 10 seconds max wait
+
             const checkSnap = () => {
-                if (typeof world !== 'undefined' && 
-                    typeof SpriteMorph !== 'undefined' && 
+                attempts++;
+                console.log(`🔍 Checking Snap! readiness (attempt ${attempts}/${maxAttempts})...`);
+                console.log('  - world:', typeof world !== 'undefined');
+                console.log('  - SpriteMorph:', typeof SpriteMorph !== 'undefined');
+                console.log('  - IDE_Morph:', typeof IDE_Morph !== 'undefined');
+
+                if (typeof world !== 'undefined' &&
+                    typeof SpriteMorph !== 'undefined' &&
                     typeof IDE_Morph !== 'undefined' &&
-                    world.children && 
-                    world.children[0] && 
+                    world.children &&
+                    world.children[0] &&
                     world.children[0].stage) {
-                    console.log('✅ Snap! is ready');
+                    console.log('✅ Snap! is fully ready');
                     resolve();
+                } else if (attempts >= maxAttempts) {
+                    console.warn('⚠️ Snap! not fully ready after timeout, proceeding anyway...');
+                    resolve(); // Don't fail, just proceed
                 } else {
                     setTimeout(checkSnap, 500);
                 }
@@ -96,8 +128,11 @@ class SnapContentScript {
      * Setup communication with background script
      */
     setupBackgroundCommunication() {
+        console.log('🔧 Setting up background communication...');
+
         // Listen for messages from background script
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            console.log('📨 Content script received message from popup:', message);
             this.handleBackgroundMessage(message, sender, sendResponse);
             return true; // Keep message channel open
         });
@@ -107,6 +142,11 @@ class SnapContentScript {
         this.port.onMessage.addListener((message) => {
             this.handlePortMessage(message);
         });
+
+        console.log('✅ Background communication setup complete');
+
+        // Set global flag to indicate content script is ready
+        window.snapContentScriptReady = true;
     }
 
     /**
@@ -149,6 +189,10 @@ class SnapContentScript {
             console.log('📨 Content script received message:', message.type);
 
             switch (message.type || message.action) {
+                case 'ping':
+                    sendResponse({ success: true, ready: true, timestamp: Date.now() });
+                    break;
+
                 case 'inject_bridge':
                     await this.injectBridge();
                     sendResponse({ success: true });
@@ -455,9 +499,23 @@ class SnapContentScript {
 }
 
 // Initialize content script
+console.log('🎯 Snap! Educational Assistant content script loaded');
+console.log('🌐 Current URL:', window.location.href);
+console.log('📄 Document ready state:', document.readyState);
+
 const snapContentScript = new SnapContentScript();
+window.SnapContentScript = SnapContentScript; // Store reference to prevent duplicate loading
+
+// Start the content script setup
+snapContentScript.setup().then(() => {
+    console.log('✅ Content script setup completed successfully');
+}).catch((error) => {
+    console.error('❌ Content script setup failed:', error);
+});
 
 // Export for testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = SnapContentScript;
 }
+
+} // End of duplicate loading check
