@@ -42,24 +42,43 @@ class SnapBlockCreator {
     // REMOVED isSnapReady method; use apiWrapper.isReady instead
 
     /**
-     * Get or set current sprite
+     * Finds and sets the current sprite in the Snap! IDE.
+     * @param {string | null} spriteName - The name of the sprite to find. If null, uses the IDE's currently selected sprite.
+     * @returns {SpriteMorph} The found or current sprite.
      */
     getCurrentSprite(spriteName = null) {
         const ide = this.apiWrapper.getIDE();
+        if (!ide) {
+            throw new Error('Cannot get current sprite: Snap! IDE is not available.');
+        }
 
         if (spriteName) {
-            // Find sprite by name
-            const sprite = ide.sprites.detect(s => s.name === spriteName);
+            // --- THIS IS THE FIX ---
+            // 1. Get the Snap! sprite collection: ide.sprites
+            // 2. Convert it into a standard JavaScript array using .asArray()
+            const spritesAsArray = ide.sprites.asArray();
+            
+            // 3. Use the standard JavaScript .find() method on the resulting array.
+            const sprite = spritesAsArray.find(s => s.name === spriteName);
+
             if (sprite) {
+                // This part of the logic was already correct.
                 ide.selectSprite(sprite);
                 this.currentSprite = sprite;
             } else {
-                throw new Error(`Sprite '${spriteName}' not found`);
+                // It's good practice to list available sprites on error.
+                const availableNames = spritesAsArray.map(s => s.name).join(', ');
+                throw new Error(`Sprite '${spriteName}' not found. Available sprites are: [${availableNames}]`);
             }
         } else {
+            // This fallback logic is correct.
             this.currentSprite = ide.currentSprite;
         }
 
+        if (!this.currentSprite) {
+            throw new Error('Could not determine the current sprite.');
+        }
+        
         return this.currentSprite;
     }
 
@@ -70,6 +89,23 @@ class SnapBlockCreator {
         // Check if Snap! environment is ready using the unified check
         if (!this.apiWrapper.isReady()) {
             throw new Error('Snap! environment is not ready. Please wait for Snap! to fully load and try again.');
+        }
+
+        // --- DEFENSIVE CHECK ---
+        // This handles the server sending a double-nested payload.
+        let finalPayload = payload;
+        if (payload && payload.payload && payload.command === 'create_blocks') {
+            console.warn('⚠️ Detected double-nested payload. Unwrapping it. Please fix the server-side logic in snap_communicator.py.');
+            finalPayload = payload.payload;
+        }
+
+        // Now, destructure from the corrected payload.
+        const { target_sprite, scripts, visual_feedback } = finalPayload;
+
+        // A more specific check for the error you saw.
+        if (!scripts || typeof scripts[Symbol.iterator] !== 'function') {
+            console.error('❌ createBlocks error: The `scripts` property in the payload is missing or not an array.', finalPayload);
+            throw new Error('Invalid payload: `scripts` is not iterable.');
         }
 
         try {

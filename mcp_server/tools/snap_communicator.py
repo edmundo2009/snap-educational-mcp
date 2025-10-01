@@ -290,17 +290,22 @@ class SnapBridgeCommunicator:
     animate: bool = True
   ) -> Dict[str, Any]:
     """Create blocks in Snap! IDE"""
-    payload = {
-      **snap_spec,
-      "visual_feedback": {
-        "animate_creation": animate,
-        "highlight_duration_ms": 2000,
-        "show_explanation": True
-      }
-    }
 
-    response = await self.send_command(session_id, "create_blocks", payload)
+    if "payload" not in snap_spec:
+        raise ValueError("Invalid snap_spec: dictionary is missing the 'payload' key.")
+
+    # This is the actual payload that the JavaScript `createBlocks` function expects.
+    payload_to_send = snap_spec["payload"]
+
+    # The block_generator.py already adds a visual_feedback section.
+    # We can simply update the 'animate_creation' flag on it.
+    if "visual_feedback" in payload_to_send:
+        payload_to_send["visual_feedback"]["animate_creation"] = animate
+    
+    # Send the correct command name and the UNWRAPPED payload.
+    response = await self.send_command(session_id, "create_blocks", payload_to_send)
     return response.get("payload", {})
+
 
   async def read_project(
     self,
