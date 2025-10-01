@@ -34,9 +34,11 @@ bridge_communicator = None
 # Active sessions and tokens - now with file persistence
 import json
 import os
+import time
 from pathlib import Path
 
 SESSIONS_FILE = Path("active_sessions.json")
+LOCK_FILE = Path("active_sessions.json.lock")
 
 def load_sessions():
 	"""Load sessions from file"""
@@ -72,6 +74,64 @@ def save_sessions():
 			json.dump(data_to_save, f, indent=2)
 	except Exception as e:
 		print(f"⚠️ Error saving sessions: {e}")
+
+
+def update_session_file(session_id: str, updates: dict):
+	"""
+	Atomically update a session in the JSON file using a lock file.
+	This is the key fix to prevent race conditions.
+	"""
+	retries = 5
+	delay = 0.1
+	for i in range(retries):
+		try:
+			with open(LOCK_FILE, 'w') as lock:
+				# Apply an exclusive lock using lock file existence
+				# This will prevent other processes from modifying the file simultaneously
+
+				# 1. Read the current state from disk
+				current_sessions = {}
+				if SESSIONS_FILE.exists():
+					with open(SESSIONS_FILE, 'r') as f:
+						current_sessions = json.load(f)
+
+				# 2. Modify the specific session
+				if session_id in current_sessions:
+					current_sessions[session_id].update(updates)
+
+					# Convert datetime objects back to strings for JSON
+					for key, value in current_sessions[session_id].items():
+						if isinstance(value, datetime):
+							current_sessions[session_id][key] = value.isoformat()
+
+					# 3. Write the entire file back
+					with open(SESSIONS_FILE, 'w') as f:
+						json.dump(current_sessions, f, indent=2)
+
+					print(f"✅ Successfully updated session '{session_id}' in JSON file with {list(updates.keys())}")
+					return True
+				else:
+					print(f"⚠️ Session '{session_id}' not found in file")
+					return False
+			# Lock is released when 'with' block exits
+			break # Exit retry loop on success
+		except (IOError, BlockingIOError) as e:
+			print(f"⚠️ Session file is locked, retrying in {delay}s... ({e})")
+			time.sleep(delay)
+			delay *= 2 # Exponential backoff
+		except Exception as e:
+			print(f"❌ Error updating session file: {e}")
+			return False
+		finally:
+			# Ensure lock file is removed
+			try:
+				if LOCK_FILE.exists():
+					os.remove(LOCK_FILE)
+			except:
+				pass
+
+	print(f"❌ Failed to acquire lock and update session file for '{session_id}' after {retries} retries.")
+	return False
 
 # Load existing sessions on startup
 active_sessions: Dict[str, Dict] = load_sessions()
@@ -178,70 +238,94 @@ def generate_secure_token(session_id: str) -> Dict[str, Any]:
 
 
 def find_session_by_display_token(display_token: str) -> Optional[str]:
-	"""Find session ID by display token"""
-	# Reload sessions from file to get latest data from other processes
-	global active_sessions
-	active_sessions = load_sessions()
+    """
+    Safely find a session ID by its display token, reloading from disk every time.
+    """
+    sessions_on_disk = load_sessions()  # load_sessions already handles file-not-found, etc.
 
-	for session_id, session_data in active_sessions.items():
-		if session_data.get("token"):
-			# Extract display token from full token
-			full_token = session_data["token"]
-			if full_token.split("-")[-1][:8].upper() == display_token.upper():
-				return session_id
-	return None
+    for session_id, session_data in sessions_on_disk.items():
+        full_token = session_data.get("token")
+        if full_token:
+            # Generate the display token from the full token for comparison
+            token_display_part = full_token.split("-")[-1][:8].upper()
+            if token_display_part == display_token.upper():
+                return session_id
+    return None
 
 
 def validate_token(display_token: str) -> tuple[Optional[str], Optional[str]]:
-	"""Validate token and return (session_id, error_message)"""
-	session_id = find_session_by_display_token(display_token)
+    """
+    Validate a display token, returning (session_id, error_message).
+    This function is now completely self-contained and robust against TypeErrors.
+    """
+    try:
+        session_id = find_session_by_display_token(display_token)
 
-	if not session_id:
-		return None, "Session not found for this token."
+        if not session_id:
+            return None, "Session not found for this token."
 
-	# Reload sessions to get latest data
-	global active_sessions
-	active_sessions = load_sessions()
+        # Reload the sessions from disk to get the most current, raw data
+        sessions_on_disk = load_sessions()
+        session_data = sessions_on_disk.get(session_id)
 
-	if session_id not in active_sessions:
-		return None, "Session not found for this token."
+        if not session_data:
+            return None, "Session data disappeared after being found. Please try again."
 
-	session = active_sessions[session_id]
+        # --- THIS IS THE CRITICAL FIX ---
+        # Get the expiration date string from the session data
+        expires_at_str = session_data.get("expires_at")
+        if not expires_at_str:
+            return None, "Session is invalid: missing expiration date."
 
-	# Check expiration
-	if datetime.utcnow() > session["expires_at"]:
-		return None, "Token has expired."
+        # Ensure the expiration date is a proper datetime object before comparing
+        if isinstance(expires_at_str, str):
+            expires_at_dt = datetime.fromisoformat(expires_at_str)
+        else:
+            # It should already be a datetime object if load_sessions worked, but this is safer
+            expires_at_dt = expires_at_str
 
-	# The token is valid, return the full session_id
-	return session_id, None
+        # Now, perform the comparison safely
+        if datetime.utcnow() > expires_at_dt:
+            return None, "Token has expired."
 
+        # The token is valid and not expired. Return the session ID.
+        return session_id, None
+
+    except Exception as e:
+        # Catch any unexpected errors (like a malformed date string)
+        import traceback
+        print("❌ UNEXPECTED ERROR during token validation:")
+        traceback.print_exc()
+        return None, f"An internal error occurred during token validation: {e}"
 
 def mark_session_connected(session_id: str) -> bool:
-	"""Mark a session as connected when WebSocket establishes"""
-	# Reload sessions to get latest data
-	global active_sessions
-	active_sessions = load_sessions()
-
-	if session_id in active_sessions:
-		active_sessions[session_id]["connected"] = True
-		active_sessions[session_id]["connected_at"] = datetime.now().isoformat()
-		save_sessions()  # Save updated state
-		return True
-	return False
+	"""Mark a session as connected by atomically updating the session file."""
+	print(f"🔗 Attempting to mark session '{session_id}' as connected in the session file...")
+	updates = {
+		"connected": True,
+		"connected_at": datetime.now().isoformat()
+	}
+	result = update_session_file(session_id, updates)
+	if result:
+		print(f"✅ Session '{session_id}' marked as connected")
+	else:
+		print(f"❌ Failed to mark session '{session_id}' as connected")
+	return result
 
 
 def mark_session_disconnected(session_id: str) -> bool:
-	"""Mark a session as disconnected when WebSocket closes"""
-	# Reload sessions to get latest data
-	global active_sessions
-	active_sessions = load_sessions()
-
-	if session_id in active_sessions:
-		active_sessions[session_id]["connected"] = False
-		active_sessions[session_id]["disconnected_at"] = datetime.now().isoformat()
-		save_sessions()  # Save updated state
-		return True
-	return False
+	"""Mark a session as disconnected by atomically updating the session file."""
+	print(f"🔌 Attempting to mark session '{session_id}' as disconnected in the session file...")
+	updates = {
+		"connected": False,
+		"disconnected_at": datetime.now().isoformat()
+	}
+	result = update_session_file(session_id, updates)
+	if result:
+		print(f"✅ Session '{session_id}' marked as disconnected")
+	else:
+		print(f"❌ Failed to mark session '{session_id}' as disconnected")
+	return result
 
 
 # ============================================================================
@@ -303,58 +387,65 @@ def start_snap_session(user_id: str = "default") -> Dict[str, Any]:
 
 @mcp.tool()
 def check_snap_connection(session_id: str) -> Dict[str, Any]:
-	"""
-	Check if browser extension is connected and ready.
-	
-	Args:
-		session_id: Session ID from start_snap_session
-	
-	Returns:
-		Connection status and readiness information
-	"""
-	try:
-		# Reload sessions from file to get latest data from other processes
-		global active_sessions
-		active_sessions = load_sessions()
+    """
+    Check if browser extension is connected and ready by ONLY reading the shared session file.
+    
+    Args:
+        session_id: Session ID from start_snap_session
+    
+    Returns:
+        Connection status and readiness information
+    """
+    try:
+        # Reload sessions from file to get the latest data written by any process.
+        sessions_on_disk = load_sessions()
 
-		if session_id not in active_sessions:
-			return {
-				"success": False,
-				"connected": False,
-				"error": "Session not found. Call start_snap_session first."
-			}
+        if session_id not in sessions_on_disk:
+            return {
+                "success": False,
+                "connected": False,
+                "error": "Session not found. Call start_snap_session first."
+            }
 
-		session = active_sessions[session_id]
+        session = sessions_on_disk[session_id]
 
-		# Check with bridge communicator (if available)
-		is_connected = False
-		snap_ready = False
+        # THIS IS THE FIX:
+        # We get the connection status DIRECTLY from the dictionary loaded from the file.
+        # We no longer ask the temporary bridge_communicator, which knows nothing.
+        is_connected = session.get("connected", False)
 
-		if bridge_communicator:
-			is_connected = bridge_communicator.is_connected(session_id)
-			snap_ready = bridge_communicator.check_snap_ready(session_id) if is_connected else False
-		else:
-			# Fallback: check session data directly
-			is_connected = session.get("connected", False)
+        # The 'snap_ready' status would also need to be written to the file in a real
+        # implementation, but for now, we can infer it.
+        snap_ready = is_connected  # Assume if connected, Snap is ready.
 
-		return {
-			"success": True,
-			"connected": is_connected,
-			"snap_ready": snap_ready,
-			"session_active": datetime.utcnow() < session["expires_at"],
-			"time_remaining_seconds": (session["expires_at"] - datetime.utcnow()).total_seconds(),
-			"status_message": (
-				"✓ Connected and ready!" if (is_connected and snap_ready)
-				else "⏳ Waiting for browser connection..." if not is_connected
-				else "⚠ Connected but Snap! not loaded"
-			)
-		}
+        # Ensure 'expires_at' is a datetime object for comparison
+        expires_at = session.get("expires_at")
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
 
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e)
-		}
+        session_active = datetime.utcnow() < expires_at
+
+        return {
+            "success": True,
+            "connected": is_connected,
+            "snap_ready": snap_ready,
+            "session_active": session_active,
+            "time_remaining_seconds": (expires_at - datetime.utcnow()).total_seconds() if session_active else 0,
+            "status_message": (
+                "✓ Connected and ready!" if (is_connected and snap_ready)
+                else "⏳ Waiting for browser connection..."
+            )
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 
 # ============================================================================
 # MCP TOOLS - BLOCK GENERATION

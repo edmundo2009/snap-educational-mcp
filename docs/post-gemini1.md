@@ -286,9 +286,7 @@ Despite successful WebSocket connections and proper session callbacks, **RovoDev
 ```
 │ ✅ Session Active: The Snap! session is running and can generate block specifications 
 │ ❌ Browser Not Connected: The browser extension hasn't connected yet (execution timed out)
-│                                                                                                                    
-│ This means:                                                                                                        
-│                                                                                                                    
+         
 │  • The Snap! MCP session is working properly                                                                       
 │  • The browser extension is not yet connected to enter the token                                                   
 │  • Preview mode works (can generate block specifications)                                                          

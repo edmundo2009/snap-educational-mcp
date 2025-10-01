@@ -42,6 +42,7 @@
         "snap_bridge/block_creator.js",
         "snap_bridge/snap_api_wrapper.js",
         "snap_bridge/websocket_client.js",
+        "snap_bridge/page_world_script.js",
         "snap_bridge/visual_feedback.js"
       ],
       "matches": [

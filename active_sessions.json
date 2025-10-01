@@ -23,7 +23,68 @@
     "token": "snap-mcp-f1acc193-886b-49c9-86c0-a4729bcdb15d",
     "created_at": "2025-10-01T06:53:50.634267",
     "expires_at": "2025-10-01T07:23:50.634267",
-    "connected": true,
-    "connected_at": "2025-10-01T15:54:35.862051"
+    "connected": false,
+    "connected_at": "2025-10-01T15:54:35.862051",
+    "disconnected_at": "2025-10-01T16:12:47.175236"
+  },
+  "sess_675543f0c271": {
+    "token": "snap-mcp-4a53383f-870b-407c-a9fd-878f347ea75b",
+    "created_at": "2025-10-01T07:18:42.519322",
+    "expires_at": "2025-10-01T07:48:42.519322",
+    "connected": false
+  },
+  "sess_1fe1c601988f": {
+    "token": "snap-mcp-a28c7bf8-bff8-4695-9b94-6512ec9e6857",
+    "created_at": "2025-10-01T07:44:33.440769",
+    "expires_at": "2025-10-01T08:14:33.440769",
+    "connected": false
+  },
+  "sess_72a716f56147": {
+    "token": "snap-mcp-1825a8b3-3817-43d3-93e8-245838c51efe",
+    "created_at": "2025-10-01T08:21:22.540031",
+    "expires_at": "2025-10-01T08:51:22.540031",
+    "connected": false
+  },
+  "sess_4718b5905ea6": {
+    "token": "snap-mcp-eb169002-6a66-4251-bd10-2e8ba931940c",
+    "created_at": "2025-10-01T08:39:59.041814",
+    "expires_at": "2025-10-01T09:09:59.041814",
+    "connected": false
+  },
+  "sess_c29a8813ca04": {
+    "token": "snap-mcp-ed876d33-a075-4856-9cbd-e3b10f4a83cf",
+    "created_at": "2025-10-01T09:03:15.431787",
+    "expires_at": "2025-10-01T09:33:15.431787",
+    "connected": false
+  },
+  "sess_7ebd88b7bfb7": {
+    "token": "snap-mcp-c303fe2f-7e04-482c-b25f-ca9046ec095b",
+    "created_at": "2025-10-01T09:11:43.002626",
+    "expires_at": "2025-10-01T09:41:43.002626",
+    "connected": false,
+    "connected_at": "2025-10-01T18:12:04.094484",
+    "disconnected_at": "2025-10-01T18:14:30.078444"
+  },
+  "sess_666f643489be": {
+    "token": "snap-mcp-9068a50a-4921-4977-a725-677e388a5c6b",
+    "created_at": "2025-10-01T09:12:57.834395",
+    "expires_at": "2025-10-01T09:42:57.834395",
+    "connected": false
+  },
+  "sess_1e50f72fee01": {
+    "token": "snap-mcp-68dba638-4e62-4d6b-a21c-f322fcb10083",
+    "created_at": "2025-10-01T09:14:14.775760",
+    "expires_at": "2025-10-01T09:44:14.775760",
+    "connected": false,
+    "connected_at": "2025-10-01T18:15:43.869411",
+    "disconnected_at": "2025-10-01T18:21:19.782102"
+  },
+  "sess_d124e5349cdc": {
+    "token": "snap-mcp-5a2df32d-2343-433c-85df-734c3910500b",
+    "created_at": "2025-10-01T09:27:38.621824",
+    "expires_at": "2025-10-01T09:57:38.621824",
+    "connected": false,
+    "connected_at": "2025-10-01T18:27:54.057562",
+    "disconnected_at": "2025-10-01T18:33:58.233566"
   }
 }

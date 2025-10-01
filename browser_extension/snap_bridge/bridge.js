@@ -174,7 +174,6 @@ class SnapBridge {
      */
     async connect(token) {
         try {
-            // Prevent duplicate connections
             if (this.websocketClient && this.websocketClient.isConnected) {
                 console.log('⚠️ Already connected to MCP server, skipping connection attempt');
                 return;
@@ -182,11 +181,10 @@ class SnapBridge {
 
             console.log('🔌 Connecting to MCP server...');
 
-            // Initialize WebSocket client if not already done
             if (!this.websocketClient) {
                 this.websocketClient = new WebSocketClient('ws://localhost:8765');
 
-                // Set up event handlers
+                // Set up the high-level event listeners
                 this.websocketClient.on('connected', () => {
                     console.log('✅ WebSocket connected via client');
                     this.isConnected = true;
@@ -195,25 +193,28 @@ class SnapBridge {
                 this.websocketClient.on('disconnected', (event) => {
                     console.log('🔌 WebSocket disconnected via client:', event);
                     this.isConnected = false;
-                    this.showReconnectUI();
+                    // this.showReconnectUI(); // You can enable this later
                 });
 
                 this.websocketClient.on('error', (error) => {
                     console.error('❌ WebSocket error via client:', error);
-                    this.showErrorUI('Connection failed. Make sure MCP server is running.');
+                    // this.showErrorUI('Connection failed.'); // You can enable this later
                 });
 
-                this.websocketClient.on('message', (message) => {
-                    this.handleMessage(message);
+                // --- THIS IS THE CRITICAL FIX ---
+                // We are now listening for the specific 'command' event.
+                this.websocketClient.on('command', (commandMessage) => {
+                    console.log(`BRIDGE: Received command event: '${commandMessage.command}'`);
+                    this.handleCommand(commandMessage);
                 });
             }
 
-            // Connect with token
+            // Now, initiate the connection
             await this.websocketClient.connect(token);
 
         } catch (error) {
             console.error('❌ Connection error:', error);
-            this.showErrorUI('Failed to connect to server.');
+            // this.showErrorUI('Failed to connect to server.');
         }
     }
 
@@ -294,8 +295,10 @@ class SnapBridge {
      * Handle incoming commands
      */
     async handleCommand(message) {
-        try {
-            let result;
+      // Add this logging line
+      console.log(`BRIDGE: Executing command '${message.command}' with payload:`, message.payload);
+      try {
+          let result;
             
             switch (message.command) {
                 case 'create_blocks':
