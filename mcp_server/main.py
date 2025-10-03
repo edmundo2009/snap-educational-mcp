@@ -461,6 +461,7 @@ def check_snap_connection(session_id: str) -> Dict[str, Any]:
 # ============================================================================
 
 
+# COMMENTED OUT FOR MATH POC - NOT NEEDED
 @mcp.tool()
 async def generate_snap_blocks(
 	description: str,
@@ -712,9 +713,7 @@ async def generate_math_blocks(
 			                 key=lambda k: active_sessions[k]["created_at"])
 
 		# Send to Snap! via bridge communicator
-		# result = await bridge_communicator.send_blocks(session_id, snap_json)
 		result = await bridge_communicator.create_blocks(session_id, snap_json)
-    # result = await bridge_communicator.create_blocks(session_id, snap_spec, animate=True)
 
 		return {
 			"success": True,

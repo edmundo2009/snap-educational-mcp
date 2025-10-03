@@ -15,9 +15,15 @@ from ..parsers.validators import validate_snap_json
 from ..parsers.math_parser import parse_math_problem
 
 
-import google.generativeai as genai  # type: ignore
-# Configure the API key for the entire module once.
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+try:
+    import google.generativeai as genai  # type: ignore
+    # Configure the API key for the entire module once.
+    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+    GEMINI_AVAILABLE = True
+except (ImportError, KeyError):
+    genai = None
+    GEMINI_AVAILABLE = False
+    print("⚠️  Gemini API not available - math patterns will work without AI fallback")
 
 @dataclass
 class SnapBlock:
@@ -59,9 +65,13 @@ class SnapBlockGenerator:
         # self.fast_model = self.client.get_generative_model('gemini-1.5-flash')
         # self.smart_model = self.client.get_generative_model('gemini-1.5-pro')
 
-        # Model selection
-        self.fast_model = genai.GenerativeModel('gemini-1.5-flash')
-        self.smart_model = genai.GenerativeModel('gemini-1.5-pro')
+        # Model selection (only if Gemini is available)
+        if GEMINI_AVAILABLE:
+            self.fast_model = genai.GenerativeModel('gemini-1.5-flash')
+            self.smart_model = genai.GenerativeModel('gemini-1.5-pro')
+        else:
+            self.fast_model = None
+            self.smart_model = None
 
         # LRU cache
         self._generative_cache = OrderedDict()
@@ -269,6 +279,8 @@ class SnapBlockGenerator:
 
     def _select_model(self, user_description: str):
         """Choose model based on complexity"""
+        if not GEMINI_AVAILABLE:
+            return None
         word_count = len(user_description.split())
         has_logic = any(w in user_description.lower()
                         for w in ['if', 'when', 'while', 'until', 'and', 'then'])
@@ -369,6 +381,10 @@ class SnapBlockGenerator:
             return self._create_error_fallback("API limit exceeded", user_description)
 
         model = self._select_model(user_description)
+
+        # If no model available (Gemini not configured), return fallback
+        if model is None:
+            return self._create_error_fallback("Gemini API not available", user_description)
 
         for attempt in range(max_retries):
             try:
