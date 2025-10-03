@@ -1,27 +1,28 @@
 # mcp_server/main.py - Snap! Educational MCP Server
+from pathlib import Path
+import time
+from mcp_server.tools.snap_communicator import SnapBridgeCommunicator
+from mcp_server.parsers.intent_parser import SnapIntentParser, ParsedIntent
+from mcp_server.tools.tutorial_creator import TutorialCreator
+from mcp_server.tools.concept_explainer import ConceptExplainer
+from mcp_server.tools.block_generator import SnapBlockGenerator, BlockSequence
+import websockets
+from mcp.server import FastMCP
+from dataclasses import dataclass, asdict
+from typing import Dict, List, Optional, Literal, Any
+from datetime import datetime, timedelta
+import asyncio
+import uuid
+import hashlib
+import hmac
+import json
+import sys
+import os
 from dotenv import load_dotenv
 load_dotenv()
 
-import os
-import sys
-import json
-import hmac
-import hashlib
-import uuid
-import asyncio
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Literal, Any
-from dataclasses import dataclass, asdict
-
-from mcp.server import FastMCP
-import websockets
 
 # Import our Snap! specific modules
-from mcp_server.tools.block_generator import SnapBlockGenerator, BlockSequence
-from mcp_server.tools.concept_explainer import ConceptExplainer
-from mcp_server.tools.tutorial_creator import TutorialCreator
-from mcp_server.parsers.intent_parser import SnapIntentParser, ParsedIntent
-from mcp_server.tools.snap_communicator import SnapBridgeCommunicator
 
 # Initialize MCP server
 mcp = FastMCP("snap-edu")
@@ -34,13 +35,10 @@ tutorial_creator = None
 bridge_communicator = None
 
 # Active sessions and tokens - now with file persistence
-import json
-import os
-import time
-from pathlib import Path
 
 SESSIONS_FILE = Path("active_sessions.json")
 LOCK_FILE = Path("active_sessions.json.lock")
+
 
 def load_sessions():
 	"""Load sessions from file"""
@@ -51,13 +49,16 @@ def load_sessions():
 				# Convert datetime strings back to datetime objects
 				for session_id, session_data in data.items():
 					if 'created_at' in session_data and isinstance(session_data['created_at'], str):
-						session_data['created_at'] = datetime.fromisoformat(session_data['created_at'])
+						session_data['created_at'] = datetime.fromisoformat(
+						    session_data['created_at'])
 					if 'expires_at' in session_data and isinstance(session_data['expires_at'], str):
-						session_data['expires_at'] = datetime.fromisoformat(session_data['expires_at'])
+						session_data['expires_at'] = datetime.fromisoformat(
+						    session_data['expires_at'])
 				return data
 		except Exception as e:
 			print(f"⚠️ Error loading sessions: {e}")
 	return {}
+
 
 def save_sessions():
 	"""Save sessions to file"""
@@ -110,17 +111,18 @@ def update_session_file(session_id: str, updates: dict):
 					with open(SESSIONS_FILE, 'w') as f:
 						json.dump(current_sessions, f, indent=2)
 
-					print(f"✅ Successfully updated session '{session_id}' in JSON file with {list(updates.keys())}")
+					print(
+					    f"✅ Successfully updated session '{session_id}' in JSON file with {list(updates.keys())}")
 					return True
 				else:
 					print(f"⚠️ Session '{session_id}' not found in file")
 					return False
 			# Lock is released when 'with' block exits
-			break # Exit retry loop on success
+			break  # Exit retry loop on success
 		except (IOError, BlockingIOError) as e:
 			print(f"⚠️ Session file is locked, retrying in {delay}s... ({e})")
 			time.sleep(delay)
-			delay *= 2 # Exponential backoff
+			delay *= 2  # Exponential backoff
 		except Exception as e:
 			print(f"❌ Error updating session file: {e}")
 			return False
@@ -132,8 +134,10 @@ def update_session_file(session_id: str, updates: dict):
 			except:
 				pass
 
-	print(f"❌ Failed to acquire lock and update session file for '{session_id}' after {retries} retries.")
+	print(
+	    f"❌ Failed to acquire lock and update session file for '{session_id}' after {retries} retries.")
 	return False
+
 
 # Load existing sessions on startup
 active_sessions: Dict[str, Dict] = load_sessions()
@@ -170,7 +174,8 @@ def initialize_snap_system():
 			port=8765,
 			token_validator=validate_token,  # Pass our token validation function
 			session_connected_callback=mark_session_connected,  # Called when session connects
-			session_disconnected_callback=mark_session_disconnected  # Called when session disconnects
+			# Called when session disconnects
+			session_disconnected_callback=mark_session_disconnected
 		)
 
 		print("✓ Snap! educational system initialized")
@@ -300,9 +305,11 @@ def validate_token(display_token: str) -> tuple[Optional[str], Optional[str]]:
         traceback.print_exc()
         return None, f"An internal error occurred during token validation: {e}"
 
+
 def mark_session_connected(session_id: str) -> bool:
 	"""Mark a session as connected by atomically updating the session file."""
-	print(f"🔗 Attempting to mark session '{session_id}' as connected in the session file...")
+	print(
+	    f"🔗 Attempting to mark session '{session_id}' as connected in the session file...")
 	updates = {
 		"connected": True,
 		"connected_at": datetime.now().isoformat()
@@ -317,7 +324,8 @@ def mark_session_connected(session_id: str) -> bool:
 
 def mark_session_disconnected(session_id: str) -> bool:
 	"""Mark a session as disconnected by atomically updating the session file."""
-	print(f"🔌 Attempting to mark session '{session_id}' as disconnected in the session file...")
+	print(
+	    f"🔌 Attempting to mark session '{session_id}' as disconnected in the session file...")
 	updates = {
 		"connected": False,
 		"disconnected_at": datetime.now().isoformat()
@@ -339,13 +347,13 @@ def mark_session_disconnected(session_id: str) -> bool:
 def start_snap_session(user_id: str = "default") -> Dict[str, Any]:
 	"""
 	Start a new Snap! programming session and get connection token.
-	
+
 	This must be called first to establish a secure connection between
 	the terminal and the Snap! browser extension.
-	
+
 	Args:
 		user_id: Optional identifier for the user (for tracking)
-	
+
 	Returns:
 		Dictionary containing:
 		- token: Security token to enter in browser extension
@@ -391,10 +399,10 @@ def start_snap_session(user_id: str = "default") -> Dict[str, Any]:
 def check_snap_connection(session_id: str) -> Dict[str, Any]:
     """
     Check if browser extension is connected and ready by ONLY reading the shared session file.
-    
+
     Args:
         session_id: Session ID from start_snap_session
-    
+
     Returns:
         Connection status and readiness information
     """
@@ -448,7 +456,6 @@ def check_snap_connection(session_id: str) -> Dict[str, Any]:
         }
 
 
-
 # ============================================================================
 # MCP TOOLS - BLOCK GENERATION
 # ============================================================================
@@ -465,20 +472,20 @@ async def generate_snap_blocks(
 ) -> Dict[str, Any]:
 	"""
 	Convert natural language to Snap! blocks and optionally execute in browser.
-	
+
 	This is the main tool for creating Snap! programs from descriptions.
-	
+
 	Args:
 		description: Natural language description (e.g., "make sprite jump when space pressed")
 		complexity: Difficulty level for educational appropriateness
-		execution_mode: 
+		execution_mode:
 			- "execute": Create blocks in browser immediately
 			- "preview": Show what would be created without executing
 			- "explain": Just explain what the code would do
 		target_sprite: Which sprite to add blocks to (default: "Sprite")
 		animate: Show visual feedback during creation
 		session_id: Session ID (optional, will use most recent if not provided)
-	
+
 	Returns:
 		Results including block specifications, explanations, and execution status
 	"""
@@ -701,10 +708,13 @@ async def generate_math_blocks(
 					"error": "No active Snap! session found",
 					"next_action": "Call start_snap_session to begin"
 				}
-			session_id = max(active_sessions.keys(), key=lambda k: active_sessions[k]["created_at"])
+			session_id = max(active_sessions.keys(),
+			                 key=lambda k: active_sessions[k]["created_at"])
 
 		# Send to Snap! via bridge communicator
-		result = await bridge_communicator.send_blocks(snap_json, session_id)
+		# result = await bridge_communicator.send_blocks(session_id, snap_json)
+		result = await bridge_communicator.create_blocks(session_id, snap_json)
+    # result = await bridge_communicator.create_blocks(session_id, snap_spec, animate=True)
 
 		return {
 			"success": True,

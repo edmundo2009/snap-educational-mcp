@@ -15,7 +15,7 @@ from ..parsers.validators import validate_snap_json
 from ..parsers.math_parser import parse_math_problem
 
 
-import google.generativeai as genai
+import google.generativeai as genai  # type: ignore
 # Configure the API key for the entire module once.
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
