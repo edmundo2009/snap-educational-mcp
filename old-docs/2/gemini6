@@ -1,0 +1,78 @@
+This is fantastic! The logs show we are in the final stage of debugging. The connection is stable, the IDE is found, and commands are being received *while the IDE is ready*. This is a huge success.
+
+The new error, `TypeError: ide.sprites.detect is not a function`, is a very specific and easily solvable problem related to the Snap! API itself.
+
+### Root Cause Analysis
+
+1.  **The Error:** The JavaScript engine is telling us that the object `ide.sprites` does not have a function (a method) called `detect`.
+2.  **The Object:** `ide.sprites` is a special collection object created by Snap!, not a standard JavaScript Array. While it holds a list of sprites, it has its own unique methods.
+3.  **The Mistake:** The code in `block_creator.js` is trying to use `.detect()`, which is a method from older JavaScript libraries (like Prototype.js) but is **not** a standard method for JavaScript Arrays or for Snap!'s sprite collection. The standard JavaScript method for finding an item in an array is `.find()`.
+4.  **The Clue:** In our previous readiness checks, we correctly identified that to work with the sprite list as a normal array, we must first call the `.asArray()` method on it. The code in `getCurrentSprite` is simply missing this crucial step.
+
+---
+
+### The Solution
+
+We need to modify the `getCurrentSprite` function to correctly convert the Snap! sprite collection into a standard array before trying to search it.
+
+**File:** `browser_extension/snap_bridge/block_creator.js`
+
+```javascript
+// REPLACE the entire getCurrentSprite method with this corrected version.
+
+/**
+ * Finds and sets the current sprite in the Snap! IDE.
+ * @param {string | null} spriteName - The name of the sprite to find. If null, uses the IDE's currently selected sprite.
+ * @returns {SpriteMorph} The found or current sprite.
+ */
+getCurrentSprite(spriteName = null) {
+    const ide = this.apiWrapper.getIDE();
+    if (!ide) {
+        throw new Error('Cannot get current sprite: Snap! IDE is not available.');
+    }
+
+    if (spriteName) {
+        // --- THIS IS THE FIX ---
+        // 1. Get the Snap! sprite collection: ide.sprites
+        // 2. Convert it into a standard JavaScript array using .asArray()
+        const spritesAsArray = ide.sprites.asArray();
+        
+        // 3. Use the standard JavaScript .find() method on the resulting array.
+        const sprite = spritesAsArray.find(s => s.name === spriteName);
+
+        if (sprite) {
+            // This part of the logic was already correct.
+            ide.selectSprite(sprite);
+            this.currentSprite = sprite;
+        } else {
+            // It's good practice to list available sprites on error.
+            const availableNames = spritesAsArray.map(s => s.name).join(', ');
+            throw new Error(`Sprite '${spriteName}' not found. Available sprites are: [${availableNames}]`);
+        }
+    } else {
+        // This fallback logic is correct.
+        this.currentSprite = ide.currentSprite;
+    }
+
+    if (!this.currentSprite) {
+        throw new Error('Could not determine the current sprite.');
+    }
+    
+    return this.currentSprite;
+}
+```
+
+### Why This Fix Works
+
+1.  **Correct Conversion:** It explicitly calls `ide.sprites.asArray()`, which returns a standard JavaScript array that you can loop over and search.
+2.  **Standard Method:** It replaces the non-existent `.detect()` with the correct, standard JavaScript method `.find()`.
+3.  **Improved Error Handling:** The error message will now be much more helpful if a sprite can't be found, telling you exactly which sprites *are* available.
+
+### Action Plan
+
+1.  Replace the `getCurrentSprite` function in `browser_extension/snap_bridge/block_creator.js` with the new code above.
+2.  Reload your extension in `chrome://extensions/`.
+3.  Hard-refresh the Snap! page (`Ctrl+Shift+R` or `Cmd+Shift+R`).
+4.  Connect and send a command.
+
+This time, the command should execute successfully, and you will see the blocks created on the Snap! stage. You are at the final step.

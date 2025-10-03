@@ -1,0 +1,5638 @@
+
+Directory structure:
+└── edmundo2009-snap-educational-mcp/
+    ├── README.md
+    ├── active_sessions.json
+    ├── requirements.txt
+    ├── run_mcp.bat
+    ├── setup.py
+    ├── browser_extension/
+    │   ├── background.js
+    │   ├── content_script.js
+    │   ├── manifest.json
+    │   ├── options.html
+    │   ├── options.js
+    │   ├── popup.html
+    │   ├── popup.js
+    │   └── snap_bridge/
+    │       ├── block_creator.js
+    │       ├── bridge.js
+    │       ├── page_world_script.js
+    │       ├── snap_api_wrapper.js
+    │       ├── visual_feedback.js
+    │       └── websocket_client.js
+    ├── mcp_server/
+    │   ├── __init__.py
+    │   ├── main.py
+    │   ├── knowledge/
+    │   │   ├── concepts.json
+    │   │   ├── patterns.json
+    │   │   ├── snap_blocks.json
+    │   │   └── tutorials.json
+    │   ├── parsers/
+    │   │   ├── __init__.py
+    │   │   ├── intent_parser.py
+    │   │   └── validators.py
+    │   └── tools/
+    │       ├── __init__.py
+    │       ├── block_generator.py
+    │       ├── concept_explainer.py
+    │       ├── snap_communicator.py
+    │       └── tutorial_creator.py
+    ├── snap_bridge/
+    │   ├── block_creator.js
+    │   ├── bridge.js
+    │   ├── snap_api_wrapper.js
+    │   ├── visual_feedback.js
+    │   └── websocket_client.js
+    └── wip-docs/
+        ├── before-prd3_limitsOfOnlyRules.md
+        └── prd3.md
+
+================================================
+FILE: requirements.txt
+================================================
+# ============================================================================
+# CORE MCP FRAMEWORK (Required)
+# ============================================================================
+mcp>=1.0.0
+fastmcp>=0.1.0
+
+# ============================================================================
+# ASYNC & WEBSOCKET (Required for bridge communication)
+# ============================================================================
+websockets>=12.0
+aiohttp>=3.9.0
+
+# ============================================================================
+# DATA VALIDATION (Required for robust type checking)
+# ============================================================================
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# ============================================================================
+# JSON & DATA HANDLING (Required for knowledge base)
+# ============================================================================
+jsonschema>=4.0.0
+pyyaml>=6.0
+
+# ============================================================================
+# SECURITY (Required for token generation)
+# ============================================================================
+cryptography>=41.0.0
+
+# ============================================================================
+# UTILITIES (Required for UX)
+# ============================================================================
+python-dotenv>=1.0.0  # Environment variables
+rich>=13.0.0          # Terminal formatting (optional but nice)
+
+# ============================================================================
+# DEVELOPMENT & TESTING (Optional, for development only)
+# ============================================================================
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+mypy>=1.5.0
+
+
+================================================
+FILE: run_mcp.bat
+================================================
+@echo off
+chcp 65001 >nul
+cd /d "C:\Users\Administrator\CODE\snap-educational-mcp"
+call venv\Scripts\activate.bat
+set PYTHONIOENCODING=utf-8
+python -m mcp_server.main
+
+
+================================================
+FILE: setup.py
+================================================
+`NOT INCLUDED HERE for brevity`
+
+
+================================================
+FILE: browser_extension/*
+all `NOT INCLUDED HERE for brevity`
+================================================
+
+================================================
+FILE: browser_extension/manifest.json
+================================================
+{
+  "manifest_version": 3,
+  "name": "Snap! Educational Assistant",
+  "version": "0.1.0",
+  "description": "Educational programming assistant that helps children create Snap! programs using natural language",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "notifications"
+  ],
+
+  "host_permissions": [
+    "https://snap.berkeley.edu/*",
+    "https://extensions.snap.berkeley.edu/*",
+    "http://localhost:8080/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": [
+        "https://snap.berkeley.edu/*",
+        "https://extensions.snap.berkeley.edu/*"
+      ],
+      "js": [
+        "content_script.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ],
+  
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "snap_bridge/snap_api_wrapper.js",
+        "snap_bridge/visual_feedback.js",
+        "snap_bridge/block_creator.js",
+        "snap_bridge/websocket_client.js",
+        "snap_bridge/bridge.js",
+        "snap_bridge/page_world_script.js"
+      ],
+      "matches": ["https://snap.berkeley.edu/*"]
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Snap! Educational Assistant",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  
+  "options_page": "options.html",
+  
+  "externally_connectable": {
+    "matches": [
+      "https://snap.berkeley.edu/*",
+      "https://extensions.snap.berkeley.edu/*"
+    ]
+  },
+  
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:* wss://localhost:*;"
+  }
+}
+
+
+
+
+
+================================================
+FILE: mcp_server/__init__.py
+================================================
+# mcp_server package
+
+
+
+================================================
+FILE: mcp_server/main.py
+================================================
+# mcp_server/main.py - Snap! Educational MCP Server
+
+import os
+import sys
+import json
+import hmac
+import hashlib
+import uuid
+import asyncio
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Literal, Any
+from dataclasses import dataclass, asdict
+
+from mcp.server import FastMCP
+import websockets
+
+# Import our Snap! specific modules
+from mcp_server.tools.block_generator import SnapBlockGenerator, BlockSequence
+from mcp_server.tools.concept_explainer import ConceptExplainer
+from mcp_server.tools.tutorial_creator import TutorialCreator
+from mcp_server.parsers.intent_parser import SnapIntentParser, ParsedIntent
+from mcp_server.tools.snap_communicator import SnapBridgeCommunicator
+
+# Initialize MCP server
+mcp = FastMCP("snap-edu")
+
+# Global components (initialized at startup)
+parser = None
+generator = None
+explainer = None
+tutorial_creator = None
+bridge_communicator = None
+
+# Active sessions and tokens - now with file persistence
+import json
+import os
+import time
+from pathlib import Path
+
+SESSIONS_FILE = Path("active_sessions.json")
+LOCK_FILE = Path("active_sessions.json.lock")
+
+def load_sessions():
+	"""Load sessions from file"""
+	if SESSIONS_FILE.exists():
+		try:
+			with open(SESSIONS_FILE, 'r') as f:
+				data = json.load(f)
+				# Convert datetime strings back to datetime objects
+				for session_id, session_data in data.items():
+					if 'created_at' in session_data and isinstance(session_data['created_at'], str):
+						session_data['created_at'] = datetime.fromisoformat(session_data['created_at'])
+					if 'expires_at' in session_data and isinstance(session_data['expires_at'], str):
+						session_data['expires_at'] = datetime.fromisoformat(session_data['expires_at'])
+				return data
+		except Exception as e:
+			print(f"⚠️ Error loading sessions: {e}")
+	return {}
+
+def save_sessions():
+	"""Save sessions to file"""
+	try:
+		# Convert datetime objects to strings for JSON serialization
+		data_to_save = {}
+		for session_id, session_data in active_sessions.items():
+			session_copy = session_data.copy()
+			if 'created_at' in session_copy and hasattr(session_copy['created_at'], 'isoformat'):
+				session_copy['created_at'] = session_copy['created_at'].isoformat()
+			if 'expires_at' in session_copy and hasattr(session_copy['expires_at'], 'isoformat'):
+				session_copy['expires_at'] = session_copy['expires_at'].isoformat()
+			data_to_save[session_id] = session_copy
+
+		with open(SESSIONS_FILE, 'w') as f:
+			json.dump(data_to_save, f, indent=2)
+	except Exception as e:
+		print(f"⚠️ Error saving sessions: {e}")
+
+
+def update_session_file(session_id: str, updates: dict):
+	"""
+	Atomically update a session in the JSON file using a lock file.
+	This is the key fix to prevent race conditions.
+	"""
+	retries = 5
+	delay = 0.1
+	for i in range(retries):
+		try:
+			with open(LOCK_FILE, 'w') as lock:
+				# Apply an exclusive lock using lock file existence
+				# This will prevent other processes from modifying the file simultaneously
+
+				# 1. Read the current state from disk
+				current_sessions = {}
+				if SESSIONS_FILE.exists():
+					with open(SESSIONS_FILE, 'r') as f:
+						current_sessions = json.load(f)
+
+				# 2. Modify the specific session
+				if session_id in current_sessions:
+					current_sessions[session_id].update(updates)
+
+					# Convert datetime objects back to strings for JSON
+					for key, value in current_sessions[session_id].items():
+						if isinstance(value, datetime):
+							current_sessions[session_id][key] = value.isoformat()
+
+					# 3. Write the entire file back
+					with open(SESSIONS_FILE, 'w') as f:
+						json.dump(current_sessions, f, indent=2)
+
+					print(f"✅ Successfully updated session '{session_id}' in JSON file with {list(updates.keys())}")
+					return True
+				else:
+					print(f"⚠️ Session '{session_id}' not found in file")
+					return False
+			# Lock is released when 'with' block exits
+			break # Exit retry loop on success
+		except (IOError, BlockingIOError) as e:
+			print(f"⚠️ Session file is locked, retrying in {delay}s... ({e})")
+			time.sleep(delay)
+			delay *= 2 # Exponential backoff
+		except Exception as e:
+			print(f"❌ Error updating session file: {e}")
+			return False
+		finally:
+			# Ensure lock file is removed
+			try:
+				if LOCK_FILE.exists():
+					os.remove(LOCK_FILE)
+			except:
+				pass
+
+	print(f"❌ Failed to acquire lock and update session file for '{session_id}' after {retries} retries.")
+	return False
+
+# Load existing sessions on startup
+active_sessions: Dict[str, Dict] = load_sessions()
+used_tokens: set = set()
+
+# ============================================================================
+# INITIALIZATION
+# ============================================================================
+
+
+def initialize_snap_system():
+	"""Initialize all Snap! educational components"""
+	global parser, generator, explainer, tutorial_creator, bridge_communicator
+
+	try:
+		print("🚀 Initializing Snap! Educational System...")
+
+		# Initialize knowledge-driven components
+		parser = SnapIntentParser()
+		generator = SnapBlockGenerator(
+			knowledge_path="mcp_server/knowledge/snap_blocks.json",
+			patterns_path="mcp_server/knowledge/patterns.json"
+		)
+		explainer = ConceptExplainer(
+			concepts_path="mcp_server/knowledge/concepts.json"
+		)
+		tutorial_creator = TutorialCreator(
+			templates_path="mcp_server/knowledge/tutorials.json"
+		)
+
+		# Initialize WebSocket bridge communicator with token validator and session callbacks
+		bridge_communicator = SnapBridgeCommunicator(
+			host="localhost",
+			port=8765,
+			token_validator=validate_token,  # Pass our token validation function
+			session_connected_callback=mark_session_connected,  # Called when session connects
+			session_disconnected_callback=mark_session_disconnected  # Called when session disconnects
+		)
+
+		print("✓ Snap! educational system initialized")
+		print(
+			f"✓ {len(generator.get_available_actions())} programming patterns loaded")
+		print(f"✓ WebSocket bridge ready on ws://localhost:8765")
+
+		return True
+
+	except Exception as e:
+		print(f"✗ Failed to initialize Snap! system: {e}")
+		return False
+
+# ============================================================================
+# SECURITY & TOKEN MANAGEMENT
+# ============================================================================
+
+
+def generate_secure_token(session_id: str) -> Dict[str, Any]:
+	"""Generate cryptographically secure one-time token"""
+
+	# Get secret key from environment
+	secret_key = os.environ.get(
+		"SNAP_MCP_SECRET_KEY", "default-dev-key-change-in-production")
+
+	# Token data
+	token_uuid = str(uuid.uuid4())
+	issued_at = datetime.utcnow()
+	expires_at = issued_at + timedelta(minutes=30)
+
+	token_data = {
+		"token_id": f"snap-mcp-{token_uuid}",
+		"session_id": session_id,
+		"issued_at": issued_at.isoformat(),
+		"expires_at": expires_at.isoformat(),
+		"permissions": [
+			"create_blocks",
+			"read_project",
+			"execute_script",
+			"inspect_state",
+			"create_custom_block"
+		]
+	}
+
+	# Generate HMAC signature
+	message = json.dumps(token_data, sort_keys=True).encode()
+	signature = hmac.new(
+		secret_key.encode(),
+		message,
+		hashlib.sha256
+	).hexdigest()
+
+	token_data["hmac"] = signature
+
+	# Store token info
+	active_sessions[session_id] = {
+		"token": token_data["token_id"],
+		"created_at": issued_at,
+		"expires_at": expires_at,
+		"connected": False
+	}
+
+	# Save sessions to file for sharing between processes
+	save_sessions()
+
+	return token_data
+
+
+def find_session_by_display_token(display_token: str) -> Optional[str]:
+    """
+    Safely find a session ID by its display token, reloading from disk every time.
+    """
+    sessions_on_disk = load_sessions()  # load_sessions already handles file-not-found, etc.
+
+    for session_id, session_data in sessions_on_disk.items():
+        full_token = session_data.get("token")
+        if full_token:
+            # Generate the display token from the full token for comparison
+            token_display_part = full_token.split("-")[-1][:8].upper()
+            if token_display_part == display_token.upper():
+                return session_id
+    return None
+
+
+def validate_token(display_token: str) -> tuple[Optional[str], Optional[str]]:
+    """
+    Validate a display token, returning (session_id, error_message).
+    This function is now completely self-contained and robust against TypeErrors.
+    """
+    try:
+        session_id = find_session_by_display_token(display_token)
+
+        if not session_id:
+            return None, "Session not found for this token."
+
+        # Reload the sessions from disk to get the most current, raw data
+        sessions_on_disk = load_sessions()
+        session_data = sessions_on_disk.get(session_id)
+
+        if not session_data:
+            return None, "Session data disappeared after being found. Please try again."
+
+        # --- THIS IS THE CRITICAL FIX ---
+        # Get the expiration date string from the session data
+        expires_at_str = session_data.get("expires_at")
+        if not expires_at_str:
+            return None, "Session is invalid: missing expiration date."
+
+        # Ensure the expiration date is a proper datetime object before comparing
+        if isinstance(expires_at_str, str):
+            expires_at_dt = datetime.fromisoformat(expires_at_str)
+        else:
+            # It should already be a datetime object if load_sessions worked, but this is safer
+            expires_at_dt = expires_at_str
+
+        # Now, perform the comparison safely
+        if datetime.utcnow() > expires_at_dt:
+            return None, "Token has expired."
+
+        # The token is valid and not expired. Return the session ID.
+        return session_id, None
+
+    except Exception as e:
+        # Catch any unexpected errors (like a malformed date string)
+        import traceback
+        print("❌ UNEXPECTED ERROR during token validation:")
+        traceback.print_exc()
+        return None, f"An internal error occurred during token validation: {e}"
+
+def mark_session_connected(session_id: str) -> bool:
+	"""Mark a session as connected by atomically updating the session file."""
+	print(f"🔗 Attempting to mark session '{session_id}' as connected in the session file...")
+	updates = {
+		"connected": True,
+		"connected_at": datetime.now().isoformat()
+	}
+	result = update_session_file(session_id, updates)
+	if result:
+		print(f"✅ Session '{session_id}' marked as connected")
+	else:
+		print(f"❌ Failed to mark session '{session_id}' as connected")
+	return result
+
+
+def mark_session_disconnected(session_id: str) -> bool:
+	"""Mark a session as disconnected by atomically updating the session file."""
+	print(f"🔌 Attempting to mark session '{session_id}' as disconnected in the session file...")
+	updates = {
+		"connected": False,
+		"disconnected_at": datetime.now().isoformat()
+	}
+	result = update_session_file(session_id, updates)
+	if result:
+		print(f"✅ Session '{session_id}' marked as disconnected")
+	else:
+		print(f"❌ Failed to mark session '{session_id}' as disconnected")
+	return result
+
+
+# ============================================================================
+# MCP TOOLS - SESSION MANAGEMENT
+# ============================================================================
+
+
+@mcp.tool()
+def start_snap_session(user_id: str = "default") -> Dict[str, Any]:
+	"""
+	Start a new Snap! programming session and get connection token.
+	
+	This must be called first to establish a secure connection between
+	the terminal and the Snap! browser extension.
+	
+	Args:
+		user_id: Optional identifier for the user (for tracking)
+	
+	Returns:
+		Dictionary containing:
+		- token: Security token to enter in browser extension
+		- ws_url: WebSocket URL for connection
+		- expires_in: Token validity in seconds
+		- instructions: How to connect
+	"""
+	try:
+		# Generate new session ID
+		session_id = f"sess_{uuid.uuid4().hex[:12]}"
+
+		# Generate secure token
+		token_data = generate_secure_token(session_id)
+
+		# Format user-friendly response
+		return {
+			"success": True,
+			"session_id": session_id,
+			"token": token_data["token_id"],
+			# Last 8 chars, uppercase
+			"display_token": token_data["token_id"].split("-")[-1][:8].upper(),
+			"ws_url": "ws://localhost:8765",
+			"expires_in_seconds": 1800,
+			"expires_at": token_data["expires_at"],
+			"instructions": [
+				"1. Open Snap! in your browser (https://snap.berkeley.edu/snap/snap.html)",
+				"2. Click the browser extension icon",
+				f"3. Enter this code: {token_data['token_id'].split('-')[-1][:8].upper()}",
+				"4. Start creating programs with natural language!"
+			],
+			"next_step": "Once connected, try: 'make the sprite jump when space is pressed'"
+		}
+
+	except Exception as e:
+		return {
+			"success": False,
+			"error": str(e),
+			"error_type": "session_creation_failed"
+		}
+
+
+@mcp.tool()
+def check_snap_connection(session_id: str) -> Dict[str, Any]:
+    """
+    Check if browser extension is connected and ready by ONLY reading the shared session file.
+    
+    Args:
+        session_id: Session ID from start_snap_session
+    
+    Returns:
+        Connection status and readiness information
+    """
+    try:
+        # Reload sessions from file to get the latest data written by any process.
+        sessions_on_disk = load_sessions()
+
+        if session_id not in sessions_on_disk:
+            return {
+                "success": False,
+                "connected": False,
+                "error": "Session not found. Call start_snap_session first."
+            }
+
+        session = sessions_on_disk[session_id]
+
+        # THIS IS THE FIX:
+        # We get the connection status DIRECTLY from the dictionary loaded from the file.
+        # We no longer ask the temporary bridge_communicator, which knows nothing.
+        is_connected = session.get("connected", False)
+
+        # The 'snap_ready' status would also need to be written to the file in a real
+        # implementation, but for now, we can infer it.
+        snap_ready = is_connected  # Assume if connected, Snap is ready.
+
+        # Ensure 'expires_at' is a datetime object for comparison
+        expires_at = session.get("expires_at")
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
+
+        session_active = datetime.utcnow() < expires_at
+
+        return {
+            "success": True,
+            "connected": is_connected,
+            "snap_ready": snap_ready,
+            "session_active": session_active,
+            "time_remaining_seconds": (expires_at - datetime.utcnow()).total_seconds() if session_active else 0,
+            "status_message": (
+                "✓ Connected and ready!" if (is_connected and snap_ready)
+                else "⏳ Waiting for browser connection..."
+            )
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+
+# ============================================================================
+# MCP TOOLS - BLOCK GENERATION
+# ============================================================================
+
+
+@mcp.tool()
+async def generate_snap_blocks(
+	description: str,
+	complexity: Literal["beginner", "intermediate", "advanced"] = "beginner",
+	execution_mode: Literal["execute", "preview", "explain"] = "execute",
+	target_sprite: str = "Sprite",
+	animate: bool = True,
+	session_id: Optional[str] = None
+) -> Dict[str, Any]:
+	"""
+	Convert natural language to Snap! blocks and optionally execute in browser.
+	
+	This is the main tool for creating Snap! programs from descriptions.
+	
+	Args:
+		description: Natural language description (e.g., "make sprite jump when space pressed")
+		complexity: Difficulty level for educational appropriateness
+		execution_mode: 
+			- "execute": Create blocks in browser immediately
+			- "preview": Show what would be created without executing
+			- "explain": Just explain what the code would do
+		target_sprite: Which sprite to add blocks to (default: "Sprite")
+		animate: Show visual feedback during creation
+		session_id: Session ID (optional, will use most recent if not provided)
+	
+	Returns:
+		Results including block specifications, explanations, and execution status
+	"""
+	try:
+		# Get active session
+		if not session_id:
+			if not active_sessions:
+				return {
+					"success": False,
+					"error": "No active session. Call start_snap_session first.",
+					"next_action": "Call start_snap_session to begin"
+				}
+			# Use most recent session
+			session_id = max(active_sessions.keys(),
+							 key=lambda k: active_sessions[k]["created_at"])
+
+		# Parse natural language
+		print(f"📝 Parsing: '{description}'")
+		intents = parser.parse(description)
+
+		if not intents:
+			return {
+				"success": False,
+				"error": "Could not understand the request",
+				"suggestions": [
+					"Try: 'make sprite move right 10 steps'",
+					"Try: 'when space key pressed jump up'",
+					"Try: 'spin forever and change colors'",
+					"Try: 'follow the mouse pointer'"
+				],
+				"available_patterns": generator.get_available_actions()[:10]
+			}
+
+		print(f"✓ Parsed {len(intents)} intent(s)")
+
+		# Generate block sequence
+		block_sequence = generator.generate_blocks(intents, complexity)
+
+		print(f"✓ Generated {len(block_sequence.blocks)} block(s)")
+
+		# Format for Snap! bridge
+		snap_spec = generator.format_for_snap(block_sequence, target_sprite)
+
+		# Handle different execution modes
+		if execution_mode == "explain":
+			return {
+				"success": True,
+				"mode": "explain",
+				"explanation": block_sequence.explanation,
+				"difficulty": block_sequence.difficulty,
+				"block_count": len(block_sequence.blocks),
+				"what_it_does": block_sequence.explanation,
+				"blocks_summary": [
+					{
+						"category": block.category,
+						"description": block.description
+					}
+					for block in block_sequence.blocks
+				],
+				"next_step": "Set execution_mode='execute' to create these blocks in Snap!"
+			}
+
+		elif execution_mode == "preview":
+			return {
+				"success": True,
+				"mode": "preview",
+				"explanation": block_sequence.explanation,
+				"difficulty": block_sequence.difficulty,
+				"blocks": [asdict(block) for block in block_sequence.blocks],
+				"snap_specification": snap_spec,
+				"estimated_creation_time_ms": len(block_sequence.blocks) * 100,
+				"next_step": "Set execution_mode='execute' to create these blocks in Snap!"
+			}
+
+		elif execution_mode == "execute":
+			# Check connection
+			if not bridge_communicator.is_connected(session_id):
+				return {
+					"success": False,
+					"error": "Browser not connected",
+					"explanation": block_sequence.explanation,
+					"blocks_ready": True,
+					"blocks": [asdict(block) for block in block_sequence.blocks],
+					"next_action": "Connect browser extension and try again"
+				}
+
+			# Execute via bridge
+			print(f"🚀 Sending to Snap! browser...")
+
+			result = await bridge_communicator.create_blocks(
+				session_id=session_id,
+				snap_spec=snap_spec,
+				animate=animate
+			)
+
+			if result["status"] == "success":
+				return {
+					"success": True,
+					"mode": "execute",
+					"blocks_created": result["blocks_created"],
+					"scripts_created": result["scripts_created"],
+					"execution_time_ms": result["execution_time_ms"],
+					"explanation": block_sequence.explanation,
+					"difficulty": block_sequence.difficulty,
+					"sprite": target_sprite,
+					"next_steps": [
+						"Click the green flag in Snap! to run your program",
+						"Try modifying the blocks in Snap!",
+						f"Ask me to explain: '{block_sequence.difficulty} programming concepts'"
+					],
+					"success_message": f"✨ Created {result['blocks_created']} blocks in Snap! {block_sequence.explanation}"
+				}
+			else:
+				return {
+					"success": False,
+					"error": result.get("error", "Unknown error"),
+					"error_details": result.get("details"),
+					"recovery_suggestions": result.get("recovery_suggestions", [])
+				}
+
+	except Exception as e:
+		return {
+			"success": False,
+			"error": str(e),
+			"error_type": "generation_failed",
+			"debug_info": {
+				"description": description,
+				"complexity": complexity,
+				"execution_mode": execution_mode
+			}
+		}
+
+# ============================================================================
+# MCP TOOLS - CONCEPT EXPLANATION
+# ============================================================================
+
+`NOT INCLUDED HERE for brevity`
+
+# ============================================================================
+# MCP TOOLS - TUTORIAL CREATION
+# ============================================================================
+`NOT INCLUDED HERE for brevity`
+
+
+# ============================================================================
+# MCP TOOLS - PROJECT INSPECTION
+# ============================================================================
+
+
+@mcp.tool()
+async def inspect_snap_project(
+	session_id: Optional[str] = None,
+	detail_level: Literal["summary", "detailed", "full"] = "summary"
+) -> Dict[str, Any]:
+	"""
+	Inspect the current Snap! project state.
+	
+	Useful for understanding what's already in the project before adding more.
+	
+	Args:
+		session_id: Session ID (optional)
+		detail_level: How much detail to include
+	
+	Returns:
+		Project information including sprites, scripts, variables
+	"""
+	try:
+		# Get session
+		if not session_id:
+			session_id = max(active_sessions.keys(),
+							 key=lambda k: active_sessions[k]["created_at"])
+
+		# Check connection
+		if not bridge_communicator.is_connected(session_id):
+			return {
+				"success": False,
+				"error": "Browser not connected"
+			}
+
+		# Request project info from bridge
+		project_info = await bridge_communicator.read_project(session_id, detail_level)
+
+		return {
+			"success": True,
+			"project": project_info,
+			"summary": {
+				"sprite_count": len(project_info.get("sprites", [])),
+				"total_scripts": sum(s.get("script_count", 0) for s in project_info.get("sprites", [])),
+				"custom_blocks": len(project_info.get("custom_blocks", []))
+			}
+		}
+
+	except Exception as e:
+		return {
+			"success": False,
+			"error": str(e)
+		}
+
+# ============================================================================
+# MCP TOOLS - DEBUGGING ASSISTANCE
+# ============================================================================
+
+
+@mcp.tool()
+def debug_snap_program(
+	problem_description: str,
+	current_code_description: Optional[str] = None
+) -> Dict[str, Any]:
+	"""
+	Help debug common Snap! programming issues.
+	
+	Provides kid-friendly debugging suggestions and solutions.
+	
+	Args:
+		problem_description: What's going wrong (e.g., "sprite won't move")
+		current_code_description: Optional description of current blocks
+	
+	Returns:
+		Debugging suggestions and solutions
+	"""
+	try:
+		# Common problem patterns
+		debug_db = {
+			"won't move": {
+				"causes": [
+					"Missing event block (like 'when flag clicked')",
+					"Blocks not connected properly",
+					"Sprite already at edge of screen"
+				],
+				"solutions": [
+					"Add a 'when flag clicked' hat block at the top",
+					"Make sure all blocks snap together",
+					"Try 'go to x: 0 y: 0' to reset position"
+				],
+				"test": "Click green flag and watch sprite carefully"
+			},
+			"too fast": {
+				"causes": [
+					"No wait blocks between actions",
+					"Numbers too large in motion blocks"
+				],
+				"solutions": [
+					"Add 'wait 0.1 seconds' between movements",
+					"Use smaller numbers (try 5 instead of 50)"
+				],
+				"test": "Try different wait times to find what feels right"
+			},
+			"no sound": {
+				"causes": [
+					"Computer volume is off",
+					"Sound block not connected to event",
+					"Wrong sound selected"
+				],
+				"solutions": [
+					"Check computer volume settings",
+					"Make sure sound block comes after an event block",
+					"Try a different sound from the library"
+				],
+				"test": "Try 'play sound pop' to test audio"
+			},
+			"disappears": {
+				"causes": [
+					"Sprite moved off screen",
+					"Hide block was used",
+					"Size set to 0"
+				],
+				"solutions": [
+					"Use 'go to x: 0 y: 0' to bring back",
+					"Add 'show' block at start of script",
+					"Set size to 100%"
+				],
+				"test": "Right-click sprite in sprite list and select 'show'"
+			}
+		}
+
+		# Find matching problem
+		problem_lower = problem_description.lower()
+		matching = None
+		for key, solution in debug_db.items():
+			if key in problem_lower:
+				matching = (key, solution)
+				break
+
+		if matching:
+			problem_type, solution = matching
+			return {
+				"success": True,
+				"problem_type": problem_type,
+				"possible_causes": solution["causes"],
+				"solutions": solution["solutions"],
+				"how_to_test": solution["test"],
+				"general_tips": [
+					"Always start with an event block (green hat shape)",
+					"Make sure blocks snap together properly",
+					"Test one small part at a time",
+					"Use 'say' blocks to see what's happening"
+				]
+			}
+		else:
+			# Generic debugging help
+			return {
+				"success": True,
+				"problem_type": "general",
+				"message": "Here are some general debugging tips:",
+				"debugging_steps": [
+					"1. Check that you have an event block at the start",
+					"2. Make sure all blocks are connected (no gaps)",
+					"3. Try running just one block at a time",
+					"4. Use 'say' blocks to show what the sprite is thinking",
+					"5. Click the green flag to restart fresh"
+				],
+				"common_problems": list(debug_db.keys()),
+				"tip": "Describe your problem more specifically for better help"
+			}
+
+	except Exception as e:
+		return {
+			"success": False,
+			"error": str(e)
+		}
+
+# ============================================================================
+# MCP TOOLS - ADVANCED SNAP! FEATURES
+# ============================================================================
+
+
+@mcp.tool()
+async def create_custom_snap_block(
+	block_name: str,
+	parameters: List[Dict[str, str]],
+	definition_description: str,
+	category: str = "custom",
+	session_id: Optional[str] = None
+) -> Dict[str, Any]:
+	"""
+	Create a custom Snap! block (leveraging Snap!'s advanced features).
+	
+	This teaches abstraction and code reuse.
+	
+	Args:
+		block_name: Name for the custom block (e.g., "jump with sound")
+		parameters: List of parameters [{name, type, default}]
+		definition_description: Natural language description of what block does
+		category: Block category (custom, motion, looks, etc.)
+		session_id: Session ID (optional)
+	
+	Returns:
+		Custom block creation status
+	"""
+	try:
+		# Parse definition
+		definition_intents = parser.parse(definition_description)
+		definition_blocks = generator.generate_blocks(
+			definition_intents, "intermediate")
+
+		# Format for custom block creation
+		custom_spec = {
+			"name": block_name,
+			"category": category,
+			"parameters": parameters,
+			"definition": [asdict(block) for block in definition_blocks.blocks]
+		}
+
+		# Get session
+		if not session_id:
+			session_id = max(active_sessions.keys(),
+							 key=lambda k: active_sessions[k]["created_at"])
+
+		# Send to bridge
+		result = await bridge_communicator.create_custom_block(session_id, custom_spec)
+
+		return {
+			"success": result["status"] == "success",
+			"block_name": block_name,
+			"message": f"Created custom block '{block_name}'!",
+			"how_to_use": f"Look for '{block_name}' in the {category} category",
+			"teaching_moment": "Custom blocks let you reuse code and make programs easier to read!"
+		}
+
+	except Exception as e:
+		return {
+			"success": False,
+			"error": str(e)
+		}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+if __name__ == "__main__":
+	print("=" * 60)
+	print("🎓 Snap! Educational MCP Server")
+	print("=" * 60)
+
+	# Initialize system
+	if not initialize_snap_system():
+		print("❌ Failed to initialize. Check configuration and try again.")
+		sys.exit(1)
+
+	# Check if running in STDIO mode (for RovoDev/LLM clients) or standalone mode
+	import sys
+	is_stdio_mode = not sys.stdin.isatty() or len(sys.argv) > 1 and '--stdio' in sys.argv
+
+	if is_stdio_mode:
+		# Running as STDIO MCP server (for RovoDev) + WebSocket server (for browser extension)
+		print("🔗 Starting in STDIO mode for MCP client communication")
+		print("🔗 Also starting WebSocket server for browser extension")
+
+		import threading
+		import asyncio
+
+		def run_websocket_server():
+			"""Run WebSocket server in separate thread"""
+			loop = asyncio.new_event_loop()
+			asyncio.set_event_loop(loop)
+			try:
+				loop.run_until_complete(bridge_communicator.start_server())
+				print("📡 WebSocket server started on ws://localhost:8765")
+				print("✨ Both servers ready!")
+				loop.run_forever()
+			except Exception as e:
+				print(f"❌ WebSocket server error: {e}")
+			finally:
+				loop.close()
+
+		# Start WebSocket server in background thread
+		websocket_thread = threading.Thread(target=run_websocket_server, daemon=True)
+		websocket_thread.start()
+
+		# Give WebSocket server time to start
+		import time
+		time.sleep(1)
+
+		print("🔄 Both servers running... Use Ctrl+C to stop")
+
+		try:
+			# Run STDIO server in main thread (blocking)
+			# Note: This will keep running until the client disconnects or Ctrl+C
+			mcp.run(transport="stdio")
+		except KeyboardInterrupt:
+			print("\n👋 Servers stopped by user")
+		except Exception as e:
+			print(f"\n❌ Server error: {e}")
+			sys.exit(1)
+
+		# If STDIO server exits normally (e.g., client disconnects), keep WebSocket server running
+		try:
+			# Try to print to stdout, but handle case where it's closed
+			print("\n🔄 STDIO client disconnected, but WebSocket server continues running...")
+			print("🌐 Browser extension can still connect on ws://localhost:8765")
+			print("⏳ Press Ctrl+C to stop the server")
+		except (ValueError, OSError):
+			# stdout is closed, redirect to stderr or log file
+			import sys
+			try:
+				sys.stderr.write("\n🔄 STDIO client disconnected, but WebSocket server continues running...\n")
+				sys.stderr.write("🌐 Browser extension can still connect on ws://localhost:8765\n")
+				sys.stderr.flush()
+			except:
+				# If stderr is also closed, write to log file
+				with open("server.log", "a") as f:
+					f.write("\n🔄 STDIO client disconnected, but WebSocket server continues running...\n")
+					f.write("🌐 Browser extension can still connect on ws://localhost:8765\n")
+
+		try:
+			# Keep the process alive so WebSocket server continues running
+			while True:
+				import time
+				time.sleep(1)
+		except KeyboardInterrupt:
+			try:
+				print("\n👋 All servers stopped")
+			except:
+				pass
+	else:
+		# Running in standalone mode with WebSocket server (for browser extension)
+		async def run_websocket_server():
+			"""Run WebSocket server for browser extension"""
+			try:
+				# Start WebSocket server
+				await bridge_communicator.start_server()
+
+				print("\n✨ Server ready! Next steps:")
+				print("1. In your terminal: llm 'start a snap session'")
+				print("2. Open Snap! in browser and install extension")
+				print("3. Enter the connection code")
+				print("4. Start creating: llm 'make sprite jump when space pressed'")
+				print("\n" + "=" * 60)
+
+				# Keep the server running
+				print("🔄 WebSocket server running... Press Ctrl+C to stop")
+				while True:
+					await asyncio.sleep(1)
+
+			except KeyboardInterrupt:
+				print("\n👋 Server stopped by user")
+			except Exception as e:
+				print(f"\n❌ Server error: {e}")
+				raise
+
+		# Run the WebSocket server
+		try:
+			asyncio.run(run_websocket_server())
+		except KeyboardInterrupt:
+			print("\n👋 Goodbye!")
+		except Exception as e:
+			print(f"\n❌ Fatal error: {e}")
+			sys.exit(1)
+
+
+
+================================================
+FILE: mcp_server/knowledge/concepts.json
+================================================
+`NOT INCLUDED HERE for brevity`
+
+
+
+
+
+================================================
+FILE: mcp_server/knowledge/patterns.json
+================================================
+{
+  "patterns": {
+    "jump": {
+      "blocks": [
+        {
+          "opcode": "changeYBy",
+          "inputs": {"DY": 50},
+          "category": "motion"
+        },
+        {
+          "opcode": "doWait",
+          "inputs": {"DURATION": 0.3},
+          "category": "control"
+        },
+        {
+          "opcode": "changeYBy",
+          "inputs": {"DY": -50},
+          "category": "motion"
+        }
+      ],
+      "explanation": "Makes sprite jump up and come back down!",
+      "difficulty": "beginner",
+      "triggers": ["jump", "hop", "bounce up", "leap"],
+      "estimated_time_ms": 300,
+      "teaching_points": [
+        "Positive Y values move up",
+        "Negative Y values move down",
+        "Wait blocks create timing"
+      ]
+    },
+    "move_right": {
+      "blocks": [
+        {
+          "opcode": "changeXBy",
+          "inputs": {"DX": 10},
+          "category": "motion"
+        }
+      ],
+      "explanation": "Moves sprite to the right!",
+      "difficulty": "beginner",
+      "triggers": ["move right", "go right", "right", "move forward"],
+      "estimated_time_ms": 100,
+      "teaching_points": [
+        "X coordinates control left-right movement",
+        "Positive X moves right"
+      ]
+    },
+    "move_left": {
+      "blocks": [
+        {
+          "opcode": "changeXBy",
+          "inputs": {"DX": -10},
+          "category": "motion"
+        }
+      ],
+      "explanation": "Moves sprite to the left!",
+      "difficulty": "beginner",
+      "triggers": ["move left", "go left", "left", "move backward"],
+      "estimated_time_ms": 100,
+      "teaching_points": [
+        "Negative X moves left"
+      ]
+    },
+    "spin": {
+      "blocks": [
+        {
+          "opcode": "doForever",
+          "inputs": {},
+          "category": "control",
+          "nested_blocks": [
+            {
+              "opcode": "turnRight",
+              "inputs": {"DEGREES": 15},
+              "category": "motion"
+            }
+          ]
+        }
+      ],
+      "explanation": "Makes sprite spin around forever!",
+      "difficulty": "beginner",
+      "triggers": ["spin", "rotate", "turn around", "twirl"],
+      "estimated_time_ms": 200,
+      "teaching_points": [
+        "Forever blocks repeat continuously",
+        "Small degree changes create smooth rotation"
+      ]
+    },
+    "dance": {
+      "blocks": [
+        {
+          "opcode": "doRepeat",
+          "inputs": {"TIMES": 4},
+          "category": "control",
+          "nested_blocks": [
+            {
+              "opcode": "changeXBy",
+              "inputs": {"DX": 10},
+              "category": "motion"
+            },
+            {
+              "opcode": "doWait",
+              "inputs": {"DURATION": 0.2},
+              "category": "control"
+            },
+            {
+              "opcode": "changeXBy",
+              "inputs": {"DX": -10},
+              "category": "motion"
+            },
+            {
+              "opcode": "doWait",
+              "inputs": {"DURATION": 0.2},
+              "category": "control"
+            }
+          ]
+        }
+      ],
+      "explanation": "Makes sprite dance back and forth!",
+      "difficulty": "beginner",
+      "triggers": ["dance", "wiggle", "shake", "jiggle"],
+      "estimated_time_ms": 400,
+      "teaching_points": [
+        "Repeat blocks do something multiple times",
+        "Alternating movements create dance effect"
+      ]
+    },
+    "follow_mouse": {
+      "blocks": [
+        {
+          "opcode": "doForever",
+          "inputs": {},
+          "category": "control",
+          "nested_blocks": [
+            {
+              "opcode": "gotoXY",
+              "inputs": {"X": "mouse x", "Y": "mouse y"},
+              "category": "motion"
+            }
+          ]
+        }
+      ],
+      "explanation": "Makes sprite follow the mouse pointer!",
+      "difficulty": "intermediate",
+      "triggers": ["follow mouse", "chase mouse", "track mouse", "follow pointer"],
+      "estimated_time_ms": 200,
+      "teaching_points": [
+        "Mouse position blocks get current mouse location",
+        "Forever loops create continuous following"
+      ]
+    },
+    "bouncing_ball": {
+      "blocks": [
+        {
+          "opcode": "doForever",
+          "inputs": {},
+          "category": "control",
+          "nested_blocks": [
+            {
+              "opcode": "forward",
+              "inputs": {"STEPS": 10},
+              "category": "motion"
+            },
+            {
+              "opcode": "bounceOffEdge",
+              "inputs": {},
+              "category": "motion"
+            }
+          ]
+        }
+      ],
+      "explanation": "Makes sprite bounce around the screen like a ball!",
+      "difficulty": "beginner",
+      "triggers": ["bounce", "bouncing ball", "ball bounce", "bounce around"],
+      "estimated_time_ms": 200,
+      "teaching_points": [
+        "Bounce off edge changes direction when hitting walls",
+        "Continuous movement creates bouncing effect"
+      ]
+    },
+    "change_colors": {
+      "blocks": [
+        {
+          "opcode": "doForever",
+          "inputs": {},
+          "category": "control",
+          "nested_blocks": [
+            {
+              "opcode": "changeEffect",
+              "inputs": {"EFFECT": "color", "AMOUNT": 25},
+              "category": "looks"
+            },
+            {
+              "opcode": "doWait",
+              "inputs": {"DURATION": 0.5},
+              "category": "control"
+            }
+          ]
+        }
+      ],
+      "explanation": "Makes sprite change colors continuously!",
+      "difficulty": "beginner",
+      "triggers": ["change colors", "rainbow", "colorful", "change color"],
+      "estimated_time_ms": 500,
+      "teaching_points": [
+        "Color effect changes sprite appearance",
+        "Wait blocks control speed of color changes"
+      ]
+    },
+    "grow_shrink": {
+      "blocks": [
+        {
+          "opcode": "doRepeat",
+          "inputs": {"TIMES": 10},
+          "category": "control",
+          "nested_blocks": [
+            {
+              "opcode": "changeSize",
+              "inputs": {"AMOUNT": 10},
+              "category": "looks"
+            },
+            {
+              "opcode": "doWait",
+              "inputs": {"DURATION": 0.1},
+              "category": "control"
+            }
+          ]
+        },
+        {
+          "opcode": "doRepeat",
+          "inputs": {"TIMES": 10},
+          "category": "control",
+          "nested_blocks": [
+            {
+              "opcode": "changeSize",
+              "inputs": {"AMOUNT": -10},
+              "category": "looks"
+            },
+            {
+              "opcode": "doWait",
+              "inputs": {"DURATION": 0.1},
+              "category": "control"
+            }
+          ]
+        }
+      ],
+      "explanation": "Makes sprite grow big then shrink back!",
+      "difficulty": "intermediate",
+      "triggers": ["grow and shrink", "get bigger and smaller", "expand contract"],
+      "estimated_time_ms": 2000,
+      "teaching_points": [
+        "Positive size changes make sprite bigger",
+        "Negative size changes make sprite smaller",
+        "Sequential blocks create complex animations"
+      ]
+    },
+    "say_hello": {
+      "blocks": [
+        {
+          "opcode": "doSayFor",
+          "inputs": {"MESSAGE": "Hello!", "DURATION": 2},
+          "category": "looks"
+        }
+      ],
+      "explanation": "Makes sprite say hello!",
+      "difficulty": "beginner",
+      "triggers": ["say hello", "greet", "hello", "say hi"],
+      "estimated_time_ms": 2000,
+      "teaching_points": [
+        "Say blocks make sprites communicate",
+        "Duration controls how long message shows"
+      ]
+    },
+    "play_sound_and_move": {
+      "blocks": [
+        {
+          "opcode": "doPlaySound",
+          "inputs": {"SOUND": "pop"},
+          "category": "sound"
+        },
+        {
+          "opcode": "forward",
+          "inputs": {"STEPS": 50},
+          "category": "motion"
+        }
+      ],
+      "explanation": "Plays a sound and moves sprite!",
+      "difficulty": "beginner",
+      "triggers": ["sound and move", "beep and go", "noise and walk"],
+      "estimated_time_ms": 500,
+      "teaching_points": [
+        "Multiple blocks can work together",
+        "Sound and motion can be combined"
+      ]
+    },
+    "hide_and_seek": {
+      "blocks": [
+        {
+          "opcode": "hide",
+          "inputs": {},
+          "category": "looks"
+        },
+        {
+          "opcode": "doWait",
+          "inputs": {"DURATION": 2},
+          "category": "control"
+        },
+        {
+          "opcode": "show",
+          "inputs": {},
+          "category": "looks"
+        }
+      ],
+      "explanation": "Makes sprite disappear and reappear!",
+      "difficulty": "beginner",
+      "triggers": ["hide and show", "disappear appear", "invisible visible"],
+      "estimated_time_ms": 2000,
+      "teaching_points": [
+        "Hide makes sprites invisible",
+        "Show makes sprites visible again",
+        "Wait creates timing between actions"
+      ]
+    }
+  },
+  "pattern_categories": {
+    "movement": ["jump", "move_right", "move_left", "spin", "dance", "follow_mouse", "bouncing_ball"],
+    "appearance": ["change_colors", "grow_shrink", "hide_and_seek"],
+    "communication": ["say_hello"],
+    "multimedia": ["play_sound_and_move"],
+    "beginner": ["jump", "move_right", "move_left", "spin", "dance", "bouncing_ball", "change_colors", "say_hello", "play_sound_and_move", "hide_and_seek"],
+    "intermediate": ["follow_mouse", "grow_shrink"],
+    "advanced": []
+  },
+  "combination_suggestions": {
+    "jump": ["play_sound_and_move", "change_colors"],
+    "spin": ["change_colors", "play_sound_and_move"],
+    "dance": ["play_sound_and_move", "change_colors"],
+    "follow_mouse": ["change_colors", "grow_shrink"]
+  }
+}
+
+
+
+================================================
+FILE: mcp_server/knowledge/snap_blocks.json
+================================================
+{
+  "blocks": {
+    "motion": {
+      "forward": {
+        "opcode": "forward",
+        "category": "motion",
+        "parameters": ["steps"],
+        "default_values": {"steps": 10},
+        "kid_explanation": "Makes sprite move forward!",
+        "snap_spec": "<block s=\"forward\"><l>%steps</l></block>",
+        "javascript_api": "sprite.forward(%steps)"
+      },
+      "changeXBy": {
+        "opcode": "changeXBy",
+        "category": "motion",
+        "parameters": ["dx"],
+        "default_values": {"dx": 10},
+        "kid_explanation": "Moves sprite left or right!",
+        "snap_spec": "<block s=\"changeXBy\"><l>%dx</l></block>",
+        "javascript_api": "sprite.changeXBy(%dx)"
+      },
+      "changeYBy": {
+        "opcode": "changeYBy",
+        "category": "motion",
+        "parameters": ["dy"],
+        "default_values": {"dy": 10},
+        "kid_explanation": "Moves sprite up or down!",
+        "snap_spec": "<block s=\"changeYBy\"><l>%dy</l></block>",
+        "javascript_api": "sprite.changeYBy(%dy)"
+      },
+      "turnRight": {
+        "opcode": "turnRight",
+        "category": "motion",
+        "parameters": ["degrees"],
+        "default_values": {"degrees": 15},
+        "kid_explanation": "Turns sprite to the right!",
+        "snap_spec": "<block s=\"turnRight\"><l>%degrees</l></block>",
+        "javascript_api": "sprite.turnRight(%degrees)"
+      },
+      "turnLeft": {
+        "opcode": "turnLeft",
+        "category": "motion",
+        "parameters": ["degrees"],
+        "default_values": {"degrees": 15},
+        "kid_explanation": "Turns sprite to the left!",
+        "snap_spec": "<block s=\"turnLeft\"><l>%degrees</l></block>",
+        "javascript_api": "sprite.turnLeft(%degrees)"
+      },
+      "gotoXY": {
+        "opcode": "gotoXY",
+        "category": "motion",
+        "parameters": ["x", "y"],
+        "default_values": {"x": 0, "y": 0},
+        "kid_explanation": "Makes sprite jump to a specific spot!",
+        "snap_spec": "<block s=\"gotoXY\"><l>%x</l><l>%y</l></block>",
+        "javascript_api": "sprite.gotoXY(%x, %y)"
+      },
+      "bounceOffEdge": {
+        "opcode": "bounceOffEdge",
+        "category": "motion",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Makes sprite bounce when it hits the edge!",
+        "snap_spec": "<block s=\"bounceOffEdge\"></block>",
+        "javascript_api": "sprite.bounceOffEdge()"
+      }
+    },
+    "looks": {
+      "doSay": {
+        "opcode": "doSay",
+        "category": "looks",
+        "parameters": ["message"],
+        "default_values": {"message": "Hello!"},
+        "kid_explanation": "Makes sprite say something!",
+        "snap_spec": "<block s=\"doSay\"><l>%message</l></block>",
+        "javascript_api": "sprite.say('%message')"
+      },
+      "doSayFor": {
+        "opcode": "doSayFor",
+        "category": "looks",
+        "parameters": ["message", "duration"],
+        "default_values": {"message": "Hello!", "duration": 2},
+        "kid_explanation": "Makes sprite say something for a few seconds!",
+        "snap_spec": "<block s=\"doSayFor\"><l>%message</l><l>%duration</l></block>",
+        "javascript_api": "sprite.sayFor('%message', %duration)"
+      },
+      "changeEffect": {
+        "opcode": "changeEffect",
+        "category": "looks",
+        "parameters": ["effect", "amount"],
+        "default_values": {"effect": "color", "amount": 25},
+        "kid_explanation": "Changes how the sprite looks!",
+        "snap_spec": "<block s=\"changeEffect\"><l>%effect</l><l>%amount</l></block>",
+        "javascript_api": "sprite.changeEffect('%effect', %amount)"
+      },
+      "hide": {
+        "opcode": "hide",
+        "category": "looks",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Makes sprite invisible!",
+        "snap_spec": "<block s=\"hide\"></block>",
+        "javascript_api": "sprite.hide()"
+      },
+      "show": {
+        "opcode": "show",
+        "category": "looks",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Makes sprite visible!",
+        "snap_spec": "<block s=\"show\"></block>",
+        "javascript_api": "sprite.show()"
+      },
+      "changeSize": {
+        "opcode": "changeSize",
+        "category": "looks",
+        "parameters": ["amount"],
+        "default_values": {"amount": 10},
+        "kid_explanation": "Makes sprite bigger or smaller!",
+        "snap_spec": "<block s=\"changeSize\"><l>%amount</l></block>",
+        "javascript_api": "sprite.changeSize(%amount)"
+      }
+    },
+    "sound": {
+      "doPlaySound": {
+        "opcode": "doPlaySound",
+        "category": "sound",
+        "parameters": ["sound"],
+        "default_values": {"sound": "pop"},
+        "kid_explanation": "Plays a sound!",
+        "snap_spec": "<block s=\"doPlaySound\"><l>%sound</l></block>",
+        "javascript_api": "sprite.playSound('%sound')"
+      },
+      "doPlaySoundUntilDone": {
+        "opcode": "doPlaySoundUntilDone",
+        "category": "sound",
+        "parameters": ["sound"],
+        "default_values": {"sound": "pop"},
+        "kid_explanation": "Plays a sound and waits for it to finish!",
+        "snap_spec": "<block s=\"doPlaySoundUntilDone\"><l>%sound</l></block>",
+        "javascript_api": "sprite.playSoundUntilDone('%sound')"
+      }
+    },
+    "events": {
+      "receiveGo": {
+        "opcode": "receiveGo",
+        "category": "events",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Starts when green flag is clicked!",
+        "snap_spec": "<block s=\"receiveGo\"></block>",
+        "javascript_api": "// Event block - no direct API",
+        "is_hat_block": true
+      },
+      "receiveKey": {
+        "opcode": "receiveKey",
+        "category": "events",
+        "parameters": ["key"],
+        "default_values": {"key": "space"},
+        "kid_explanation": "Starts when a key is pressed!",
+        "snap_spec": "<block s=\"receiveKey\"><l>%key</l></block>",
+        "javascript_api": "// Event block - no direct API",
+        "is_hat_block": true
+      },
+      "receiveClick": {
+        "opcode": "receiveClick",
+        "category": "events",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Starts when sprite is clicked!",
+        "snap_spec": "<block s=\"receiveClick\"></block>",
+        "javascript_api": "// Event block - no direct API",
+        "is_hat_block": true
+      }
+    },
+    "control": {
+      "doWait": {
+        "opcode": "doWait",
+        "category": "control",
+        "parameters": ["duration"],
+        "default_values": {"duration": 1},
+        "kid_explanation": "Waits for some time!",
+        "snap_spec": "<block s=\"doWait\"><l>%duration</l></block>",
+        "javascript_api": "sprite.wait(%duration)"
+      },
+      "doRepeat": {
+        "opcode": "doRepeat",
+        "category": "control",
+        "parameters": ["times"],
+        "default_values": {"times": 10},
+        "kid_explanation": "Repeats the blocks inside!",
+        "snap_spec": "<block s=\"doRepeat\"><l>%times</l><script></script></block>",
+        "javascript_api": "sprite.repeat(%times, function() { /* blocks */ })",
+        "is_c_block": true
+      },
+      "doForever": {
+        "opcode": "doForever",
+        "category": "control",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Repeats the blocks inside forever!",
+        "snap_spec": "<block s=\"doForever\"><script></script></block>",
+        "javascript_api": "sprite.forever(function() { /* blocks */ })",
+        "is_c_block": true
+      },
+      "doIf": {
+        "opcode": "doIf",
+        "category": "control",
+        "parameters": ["condition"],
+        "default_values": {"condition": "true"},
+        "kid_explanation": "Does something only if condition is true!",
+        "snap_spec": "<block s=\"doIf\"><block>%condition</block><script></script></block>",
+        "javascript_api": "if (%condition) { /* blocks */ }",
+        "is_c_block": true
+      }
+    },
+    "sensing": {
+      "reportTouchingObject": {
+        "opcode": "reportTouchingObject",
+        "category": "sensing",
+        "parameters": ["object"],
+        "default_values": {"object": "edge"},
+        "kid_explanation": "Checks if sprite is touching something!",
+        "snap_spec": "<block s=\"reportTouchingObject\"><l>%object</l></block>",
+        "javascript_api": "sprite.isTouching('%object')"
+      },
+      "reportMouseX": {
+        "opcode": "reportMouseX",
+        "category": "sensing",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Gets the mouse's left-right position!",
+        "snap_spec": "<block s=\"reportMouseX\"></block>",
+        "javascript_api": "world.hand.position().x"
+      },
+      "reportMouseY": {
+        "opcode": "reportMouseY",
+        "category": "sensing",
+        "parameters": [],
+        "default_values": {},
+        "kid_explanation": "Gets the mouse's up-down position!",
+        "snap_spec": "<block s=\"reportMouseY\"></block>",
+        "javascript_api": "world.hand.position().y"
+      },
+      "reportKeyPressed": {
+        "opcode": "reportKeyPressed",
+        "category": "sensing",
+        "parameters": ["key"],
+        "default_values": {"key": "space"},
+        "kid_explanation": "Checks if a key is being pressed right now!",
+        "snap_spec": "<block s=\"reportKeyPressed\"><l>%key</l></block>",
+        "javascript_api": "world.currentKey === '%key'"
+      }
+    },
+    "operators": {
+      "reportSum": {
+        "opcode": "reportSum",
+        "category": "operators",
+        "parameters": ["a", "b"],
+        "default_values": {"a": 1, "b": 1},
+        "kid_explanation": "Adds two numbers together!",
+        "snap_spec": "<block s=\"reportSum\"><l>%a</l><l>%b</l></block>",
+        "javascript_api": "%a + %b"
+      },
+      "reportDifference": {
+        "opcode": "reportDifference",
+        "category": "operators",
+        "parameters": ["a", "b"],
+        "default_values": {"a": 10, "b": 5},
+        "kid_explanation": "Subtracts one number from another!",
+        "snap_spec": "<block s=\"reportDifference\"><l>%a</l><l>%b</l></block>",
+        "javascript_api": "%a - %b"
+      },
+      "reportRandom": {
+        "opcode": "reportRandom",
+        "category": "operators",
+        "parameters": ["min", "max"],
+        "default_values": {"min": 1, "max": 10},
+        "kid_explanation": "Picks a random number!",
+        "snap_spec": "<block s=\"reportRandom\"><l>%min</l><l>%max</l></block>",
+        "javascript_api": "Math.floor(Math.random() * (%max - %min + 1)) + %min"
+      }
+    },
+    "variables": {
+      "doSetVar": {
+        "opcode": "doSetVar",
+        "category": "variables",
+        "parameters": ["variable", "value"],
+        "default_values": {"variable": "my variable", "value": 0},
+        "kid_explanation": "Puts a value in a variable box!",
+        "snap_spec": "<block s=\"doSetVar\"><l>%variable</l><l>%value</l></block>",
+        "javascript_api": "sprite.variables['%variable'] = %value"
+      },
+      "doChangeVar": {
+        "opcode": "doChangeVar",
+        "category": "variables",
+        "parameters": ["variable", "amount"],
+        "default_values": {"variable": "my variable", "amount": 1},
+        "kid_explanation": "Changes what's in a variable box!",
+        "snap_spec": "<block s=\"doChangeVar\"><l>%variable</l><l>%amount</l></block>",
+        "javascript_api": "sprite.variables['%variable'] += %amount"
+      }
+    }
+  },
+  "categories": {
+    "motion": {
+      "color": "#4a6cd4",
+      "description": "Blocks that make sprites move around"
+    },
+    "looks": {
+      "color": "#8a55d7",
+      "description": "Blocks that change how sprites look"
+    },
+    "sound": {
+      "color": "#bb42c3",
+      "description": "Blocks that make sounds and music"
+    },
+    "events": {
+      "color": "#c88330",
+      "description": "Blocks that start scripts when things happen"
+    },
+    "control": {
+      "color": "#e1a91a",
+      "description": "Blocks that control when and how often things happen"
+    },
+    "sensing": {
+      "color": "#2ca5e2",
+      "description": "Blocks that detect things in the world"
+    }
+  }
+}
+
+
+
+================================================
+FILE: mcp_server/knowledge/tutorials.json
+================================================
+`NOT INCLUDED HERE for brevity`
+
+
+
+
+================================================
+FILE: mcp_server/parsers/__init__.py
+================================================
+# mcp_server/parsers/__init__.py - Parser modules for natural language processing
+
+
+
+================================================
+FILE: mcp_server/parsers/intent_parser.py
+================================================
+
+# mcp_server/parsers/intent_parser.py - Lightweight Pattern Matching
+
+import re
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass, field
+
+
+@dataclass
+class ParsedIntent:
+    """Structured intent representation"""
+    action: str                          # "move", "jump", "turn", etc.
+    trigger: Optional[str] = None        # "key_press", "flag_click", etc.
+    subject: str = "sprite"              # What performs the action
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    # "forever", "repeat", etc.
+    modifiers: List[str] = field(default_factory=list)
+    confidence: float = 1.0
+    raw_text: str = ""
+
+
+class SnapIntentParser:
+    """
+    LIGHTWEIGHT intent parser using pattern matching.
+    
+    Philosophy:
+    - Claude/LLM does the heavy NLP lifting
+    - This parser handles structured extraction from well-formed descriptions
+    - Focuses on Snap! programming domain knowledge
+    - No external NLP libraries needed
+    """
+
+    def __init__(self):
+        # Domain-specific patterns (Snap! programming vocabulary)
+        self.patterns = self._load_patterns()
+
+    def _load_patterns(self) -> Dict[str, Any]:
+        """
+        Load Snap! programming patterns.
+        These are domain-specific, not general-purpose NLP.
+        """
+        return {
+            # ACTION PATTERNS - What should happen
+            "actions": {
+                # Motion
+                "move": [r"move|walk|go|step|advance"],
+                "turn": [r"turn|rotate|spin|twist|pivot"],
+                "jump": [r"jump|hop|leap|bounce"],
+                "glide": [r"glide|slide|float"],
+                "goto": [r"go to|goto|teleport|warp"],
+
+                # Looks
+                "say": [r"say|speak|talk|announce"],
+                "think": [r"think|ponder|wonder"],
+                "change_costume": [r"costume|outfit|look|appearance"],
+                "change_size": [r"size|grow|shrink|scale"],
+                "show": [r"show|appear|visible"],
+                "hide": [r"hide|disappear|invisible"],
+
+                # Sound
+                "play_sound": [r"play sound|sound|beep|noise"],
+                "change_volume": [r"volume|loud|quiet"],
+
+                # Control
+                "wait": [r"wait|pause|delay"],
+                "repeat": [r"repeat|loop"],
+                "forever": [r"forever|always|continuously"],
+
+                # Sensing
+                "follow": [r"follow|chase|track"],
+                "detect": [r"detect|sense|check"]
+            },
+
+            # TRIGGER PATTERNS - When should it happen
+            "triggers": {
+                "flag_click": [
+                    r"when (?:green )?flag (?:is )?clicked",
+                    r"when (?:program )?starts?",
+                    r"at (?:the )?start"
+                ],
+                "key_press": [
+                    r"when (?:the )?(\w+)(?: key)? (?:is )?pressed",
+                    r"(?:on )?press(?:ing)? (?:the )?(\w+)(?: key)?",
+                    r"(?:when )?(\w+) key"
+                ],
+                "sprite_click": [
+                    r"when (?:this )?sprite (?:is )?clicked",
+                    r"(?:on )?click(?:ing)? (?:the )?sprite"
+                ],
+                "forever": [
+                    r"forever",
+                    r"continuously",
+                    r"always"
+                ]
+            },
+
+            # PARAMETER PATTERNS - Extract values
+            "parameters": {
+                "number": r"(-?\d+(?:\.\d+)?)",
+                "direction": r"(left|right|up|down|forward|backward|north|south|east|west)",
+                "color": r"(red|blue|green|yellow|orange|purple|pink|black|white|brown|gray)",
+                "key": r"(space|enter|up arrow|down arrow|left arrow|right arrow|[a-z])",
+                "steps": r"(\d+)\s*steps?",
+                "degrees": r"(\d+)\s*degrees?",
+                "seconds": r"(\d+(?:\.\d+)?)\s*(?:second|sec)s?",
+                "times": r"(\d+)\s*times?"
+            },
+
+            # MODIFIER PATTERNS - How should it happen
+            "modifiers": {
+                "forever": [r"forever", r"continuously", r"always"],
+                "repeat": [r"repeat", r"loop"],
+                "until": [r"until", r"till"],
+                "fast": [r"fast|quick(?:ly)?|rapid(?:ly)?"],
+                "slow": [r"slow(?:ly)?|gradual(?:ly)?"]
+            }
+        }
+
+    def parse(self, text: str) -> List[ParsedIntent]:
+        """
+        Parse structured description into intents.
+        
+        Expected input format (from Claude):
+        - "when space key pressed, move sprite up 50 pixels"
+        - "make sprite turn right 90 degrees forever"
+        - "play sound pop and say hello"
+        
+        Returns list of intents (one per action)
+        """
+        text = text.lower().strip()
+
+        # Split compound sentences
+        sentences = self._split_sentences(text)
+
+        intents = []
+        for sentence in sentences:
+            intent = self._parse_sentence(sentence)
+            if intent:
+                intents.append(intent)
+
+        return intents
+
+    def _split_sentences(self, text: str) -> List[str]:
+        """Split on common conjunctions while preserving triggers"""
+
+        # First, check if this is a trigger-action sentence
+        trigger_match = None
+        for trigger_type, patterns in self.patterns["triggers"].items():
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    trigger_match = (trigger_type, match)
+                    break
+            if trigger_match:
+                break
+
+        # Split on: "and", "then", comma (but preserve trigger context)
+        if trigger_match and ',' in text:
+            # Special handling for "when X, do Y" format
+            parts = text.split(',', 1)
+            if len(parts) == 2:
+                trigger_part = parts[0].strip()
+                action_part = parts[1].strip()
+
+                # If the action part doesn't have a trigger, prepend the trigger context
+                if not any(re.search(p, action_part, re.IGNORECASE)
+                          for patterns in self.patterns["triggers"].values()
+                          for p in patterns):
+                    # Combine trigger with action
+                    return [text]  # Keep as single sentence
+
+        # Default splitting for other cases
+        parts = re.split(r'\s+(?:and|then)\s+|\s*;\s*', text)
+        return [p.strip() for p in parts if p.strip()]
+
+    def _parse_sentence(self, text: str) -> Optional[ParsedIntent]:
+        """Parse single sentence into intent"""
+
+        # Extract components
+        trigger = self._extract_trigger(text)
+        action = self._extract_action(text)
+        subject = self._extract_subject(text)
+        parameters = self._extract_parameters(text)
+        modifiers = self._extract_modifiers(text)
+
+        if not action:
+            # No clear action found
+            return None
+
+        return ParsedIntent(
+            action=action,
+            trigger=trigger,
+            subject=subject,
+            parameters=parameters,
+            modifiers=modifiers,
+            confidence=self._calculate_confidence(action, trigger, parameters),
+            raw_text=text
+        )
+
+    def _extract_trigger(self, text: str) -> Optional[str]:
+        """Extract event trigger"""
+        for trigger_type, patterns in self.patterns["triggers"].items():
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    # Store key if it's a key press
+                    if trigger_type == "key_press" and match.groups():
+                        # This will be added to parameters
+                        return trigger_type
+                    return trigger_type
+        return None
+
+    def _extract_action(self, text: str) -> Optional[str]:
+        """Extract primary action"""
+        for action_type, patterns in self.patterns["actions"].items():
+            for pattern in patterns:
+                if re.search(pattern, text, re.IGNORECASE):
+                    return action_type
+        return None
+
+    def _extract_subject(self, text: str) -> str:
+        """Extract subject (sprite, stage, etc.)"""
+        if re.search(r"sprite|character|player", text, re.IGNORECASE):
+            return "sprite"
+        elif re.search(r"stage|background|backdrop", text, re.IGNORECASE):
+            return "stage"
+        return "sprite"  # Default
+
+    def _extract_parameters(self, text: str) -> Dict[str, Any]:
+        """Extract numerical and named parameters"""
+        params = {}
+
+        for param_type, pattern in self.patterns["parameters"].items():
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                if param_type == "number":
+                    # Convert to numeric
+                    params[param_type] = [
+                        float(m) if '.' in m else int(m) for m in matches]
+                elif param_type in ["steps", "degrees", "seconds", "times"]:
+                    # Extract numeric value
+                    params[param_type] = int(matches[0]) if matches else None
+                else:
+                    # Store string value
+                    params[param_type] = matches[0] if len(
+                        matches) == 1 else matches
+
+        # Special handling for key presses
+        key_match = re.search(
+            r"(?:when |press )?(\w+)(?: key)?", text, re.IGNORECASE)
+        if key_match and key_match.group(1) in ["space", "enter", "up", "down", "left", "right"]:
+            params["key"] = key_match.group(1)
+
+        return params
+
+    def _extract_modifiers(self, text: str) -> List[str]:
+        """Extract modifiers (forever, repeat, etc.)"""
+        modifiers = []
+        for modifier_type, patterns in self.patterns["modifiers"].items():
+            for pattern in patterns:
+                if re.search(pattern, text, re.IGNORECASE):
+                    modifiers.append(modifier_type)
+                    break
+        return modifiers
+
+    def _calculate_confidence(self, action: str, trigger: Optional[str], params: Dict) -> float:
+        """Simple confidence score"""
+        score = 0.5  # Base score
+
+        if action:
+            score += 0.3  # Have clear action
+        if trigger:
+            score += 0.1  # Have trigger
+        if params:
+            score += 0.1  # Have parameters
+
+        return min(score, 1.0)
+
+    def validate_intent(self, intent: ParsedIntent) -> Tuple[bool, Optional[str]]:
+        """
+        Validate that intent can be converted to Snap! blocks.
+        Returns (is_valid, error_message)
+        """
+        # Check if action is supported
+        if intent.action not in self.patterns["actions"]:
+            return False, f"Unknown action: {intent.action}"
+
+        # Check if trigger is supported (if present)
+        if intent.trigger and intent.trigger not in self.patterns["triggers"]:
+            return False, f"Unknown trigger: {intent.trigger}"
+
+        # Action-specific validation
+        if intent.action == "move" and "steps" not in intent.parameters and "direction" not in intent.parameters:
+            return False, "Move action needs steps or direction"
+
+        if intent.action == "turn" and "degrees" not in intent.parameters:
+            return False, "Turn action needs degrees"
+
+        return True, None
+
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+
+def example_usage():
+    """Show how the lightweight parser works"""
+    parser = SnapIntentParser()
+
+    test_cases = [
+        # Simple cases (what Claude would send)
+        "when space key pressed, move sprite up 50 steps",
+        "turn right 90 degrees",
+        "play sound pop and say hello",
+        "repeat 10 times, move forward 5 steps",
+
+        # Complex cases
+        "when flag clicked, forever move right 10 steps and if on edge bounce",
+        "make sprite follow mouse pointer",
+        "change costume to costume2 and wait 1 second"
+    ]
+
+    for test in test_cases:
+        print(f"\n📝 Input: {test}")
+        intents = parser.parse(test)
+
+        for i, intent in enumerate(intents, 1):
+            print(f"   Intent {i}:")
+            print(f"   - Action: {intent.action}")
+            print(f"   - Trigger: {intent.trigger}")
+            print(f"   - Parameters: {intent.parameters}")
+            print(f"   - Modifiers: {intent.modifiers}")
+            print(f"   - Confidence: {intent.confidence:.2f}")
+
+            is_valid, error = parser.validate_intent(intent)
+            if not is_valid:
+                print(f"   ⚠️  Validation error: {error}")
+
+
+if __name__ == "__main__":
+    example_usage()
+
+
+
+================================================
+FILE: mcp_server/parsers/validators.py
+================================================
+# mcp_server/parsers/validators.py - Input Validation and Safety Checks
+
+import re
+from typing import Dict, List, Any, Optional, Tuple
+from dataclasses import dataclass
+
+
+@dataclass
+class ValidationResult:
+    """Result of input validation"""
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+    sanitized_input: Optional[str] = None
+
+
+class SnapInputValidator:
+    """
+    Validates and sanitizes user inputs for Snap! programming.
+    
+    Ensures inputs are safe, educational, and appropriate for children.
+    """
+
+    def __init__(self):
+        self.max_input_length = 500
+        self.blocked_words = self._load_blocked_words()
+        self.safe_patterns = self._build_safe_patterns()
+
+    def _load_blocked_words(self) -> List[str]:
+        """Load list of inappropriate words/phrases"""
+        # In production, this would load from a file
+        return [
+            # Placeholder - would contain inappropriate content filters
+            "delete", "remove", "destroy", "hack", "break"
+        ]
+
+    def _build_safe_patterns(self) -> List[str]:
+        """Build patterns for safe, educational content"""
+        return [
+            r"make.*move", r"when.*pressed", r"jump", r"dance", r"spin",
+            r"change.*color", r"play.*sound", r"say", r"hide", r"show",
+            r"follow.*mouse", r"bounce", r"grow", r"shrink", r"turn"
+        ]
+
+    def validate_user_input(self, text: str) -> ValidationResult:
+        """
+        Validate user input for safety and appropriateness.
+        
+        Args:
+            text: User input to validate
+            
+        Returns:
+            ValidationResult with validation status and any issues
+        """
+        errors = []
+        warnings = []
+        sanitized = text.strip()
+
+        # Check length
+        if len(text) > self.max_input_length:
+            errors.append(f"Input too long (max {self.max_input_length} characters)")
+
+        # Check for empty input
+        if not text.strip():
+            errors.append("Input cannot be empty")
+
+        # Check for blocked content
+        blocked_found = self._check_blocked_content(text.lower())
+        if blocked_found:
+            errors.append(f"Inappropriate content detected: {', '.join(blocked_found)}")
+
+        # Check for potentially unsafe patterns
+        unsafe_patterns = self._check_unsafe_patterns(text)
+        if unsafe_patterns:
+            warnings.extend([f"Potentially unsafe: {pattern}" for pattern in unsafe_patterns])
+
+        # Sanitize input
+        sanitized = self._sanitize_input(text)
+
+        # Check if input seems educational
+        if not self._is_educational_content(text):
+            warnings.append("Input doesn't seem to be programming-related")
+
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings,
+            sanitized_input=sanitized
+        )
+
+    def _check_blocked_content(self, text: str) -> List[str]:
+        """Check for blocked words/phrases"""
+        found = []
+        for word in self.blocked_words:
+            if word in text:
+                found.append(word)
+        return found
+
+    def _check_unsafe_patterns(self, text: str) -> List[str]:
+        """Check for potentially unsafe patterns"""
+        unsafe = []
+        
+        # Check for system-related commands
+        system_patterns = [
+            r"system", r"file", r"directory", r"folder", r"disk",
+            r"network", r"internet", r"download", r"upload"
+        ]
+        
+        for pattern in system_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                unsafe.append(f"System-related term: {pattern}")
+
+        return unsafe
+
+    def _sanitize_input(self, text: str) -> str:
+        """Sanitize input by removing/replacing problematic content"""
+        # Remove excessive whitespace
+        sanitized = re.sub(r'\s+', ' ', text.strip())
+        
+        # Remove special characters that could be problematic
+        sanitized = re.sub(r'[<>{}[\]\\]', '', sanitized)
+        
+        # Limit to reasonable character set
+        sanitized = re.sub(r'[^\w\s.,!?-]', '', sanitized)
+        
+        return sanitized
+
+    def _is_educational_content(self, text: str) -> bool:
+        """Check if content seems educational/programming-related"""
+        educational_keywords = [
+            "sprite", "move", "jump", "turn", "color", "sound", "when", "if",
+            "loop", "repeat", "forever", "click", "press", "key", "mouse",
+            "dance", "spin", "bounce", "hide", "show", "say", "play"
+        ]
+        
+        text_lower = text.lower()
+        matches = sum(1 for keyword in educational_keywords if keyword in text_lower)
+        
+        # Consider it educational if it has at least one programming keyword
+        return matches > 0
+
+    def validate_block_parameters(self, parameters: Dict[str, Any]) -> ValidationResult:
+        """
+        Validate block parameters for safety and reasonableness.
+        
+        Args:
+            parameters: Dictionary of block parameters
+            
+        Returns:
+            ValidationResult for the parameters
+        """
+        errors = []
+        warnings = []
+
+        for param_name, param_value in parameters.items():
+            param_errors, param_warnings = self._validate_single_parameter(param_name, param_value)
+            errors.extend(param_errors)
+            warnings.extend(param_warnings)
+
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings
+        )
+
+    def _validate_single_parameter(self, name: str, value: Any) -> Tuple[List[str], List[str]]:
+        """Validate a single parameter"""
+        errors = []
+        warnings = []
+
+        # Numeric parameter validation
+        if isinstance(value, (int, float)):
+            if name in ["steps", "distance"]:
+                if abs(value) > 1000:
+                    warnings.append(f"{name} value {value} is very large")
+                if value == 0:
+                    warnings.append(f"{name} value is zero - sprite won't move")
+            
+            elif name in ["degrees", "angle"]:
+                if abs(value) > 360:
+                    warnings.append(f"{name} value {value} is more than a full rotation")
+            
+            elif name in ["duration", "time"]:
+                if value < 0:
+                    errors.append(f"{name} cannot be negative")
+                if value > 60:
+                    warnings.append(f"{name} value {value} seconds is very long")
+            
+            elif name in ["size", "scale"]:
+                if value <= 0:
+                    errors.append(f"{name} must be positive")
+                if value > 500:
+                    warnings.append(f"{name} value {value}% is very large")
+
+        # String parameter validation
+        elif isinstance(value, str):
+            if name in ["message", "text"]:
+                if len(value) > 100:
+                    warnings.append(f"{name} is very long ({len(value)} characters)")
+                
+                # Check for inappropriate content
+                blocked = self._check_blocked_content(value.lower())
+                if blocked:
+                    errors.append(f"Inappropriate content in {name}: {', '.join(blocked)}")
+            
+            elif name in ["key"]:
+                valid_keys = ["space", "up arrow", "down arrow", "left arrow", "right arrow", 
+                             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+                             "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+                if value.lower() not in valid_keys:
+                    warnings.append(f"Unusual key: {value}")
+
+        return errors, warnings
+
+    def suggest_safe_alternatives(self, unsafe_input: str) -> List[str]:
+        """Suggest safe alternatives for unsafe input"""
+        suggestions = []
+        
+        # If input contains blocked words, suggest alternatives
+        if any(word in unsafe_input.lower() for word in self.blocked_words):
+            suggestions.extend([
+                "Try describing what you want the sprite to do",
+                "Focus on movement, colors, sounds, or animations",
+                "Example: 'make sprite jump when space is pressed'"
+            ])
+        
+        # If input is too long, suggest simplification
+        if len(unsafe_input) > self.max_input_length:
+            suggestions.append("Try breaking your request into smaller parts")
+        
+        # If input doesn't seem programming-related
+        if not self._is_educational_content(unsafe_input):
+            suggestions.extend([
+                "Try using programming words like: move, jump, turn, color, sound",
+                "Example: 'make sprite dance and change colors'",
+                "Example: 'when mouse clicked, sprite follows mouse'"
+            ])
+
+        return suggestions
+
+    def is_age_appropriate(self, text: str, age_group: str = "elementary") -> bool:
+        """
+        Check if content is appropriate for the target age group.
+        
+        Args:
+            text: Content to check
+            age_group: Target age group (elementary, middle, high)
+            
+        Returns:
+            True if content is age-appropriate
+        """
+        # For now, just check against blocked words
+        # In production, this would be more sophisticated
+        blocked = self._check_blocked_content(text.lower())
+        return len(blocked) == 0
+
+    def get_complexity_score(self, text: str) -> int:
+        """
+        Get complexity score (1-10) for the input.
+        
+        Higher scores indicate more complex programming concepts.
+        """
+        complexity_indicators = {
+            1: ["move", "turn", "say", "color"],
+            3: ["when", "if", "repeat", "loop"],
+            5: ["variable", "list", "function", "custom"],
+            7: ["clone", "broadcast", "sensor"],
+            9: ["first-class", "lambda", "recursion"]
+        }
+        
+        max_complexity = 1
+        text_lower = text.lower()
+        
+        for level, indicators in complexity_indicators.items():
+            if any(indicator in text_lower for indicator in indicators):
+                max_complexity = max(max_complexity, level)
+        
+        return max_complexity
+
+
+
+================================================
+FILE: mcp_server/tools/__init__.py
+================================================
+# tools package
+
+
+
+================================================
+FILE: mcp_server/tools/block_generator.py
+================================================
+# mcp_server/tools/block_generator.py - Snap! Block Generation Engine
+
+import json
+import os
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, asdict
+from enum import Enum
+
+# Import the updated ParsedIntent from the parser
+from ..parsers.intent_parser import ParsedIntent
+
+
+class BlockCategory(Enum):
+    MOTION = "motion"
+    LOOKS = "looks"
+    SOUND = "sound"
+    EVENTS = "events"
+    CONTROL = "control"
+    SENSING = "sensing"
+    OPERATORS = "operators"
+    VARIABLES = "variables"
+    CUSTOM = "custom"
+
+
+@dataclass
+class SnapBlock:
+    """Represents a single Snap! block"""
+    opcode: str
+    category: BlockCategory
+    inputs: Dict[str, Any]
+    description: str
+    position: Optional[Dict[str, int]] = None
+    next_block: Optional[str] = None
+    is_hat_block: bool = False
+
+
+@dataclass
+class BlockSequence:
+    """Represents a sequence of blocks that form a complete script"""
+    blocks: List[SnapBlock]
+    explanation: str
+    difficulty: str
+    estimated_time: int = 0  # milliseconds
+
+
+class SnapBlockGenerator:
+    """
+    Core engine for converting natural language intents into Snap! block sequences.
+    
+    Uses knowledge base of block definitions and common patterns to generate
+    educationally appropriate block sequences.
+    """
+
+    def __init__(self, knowledge_path: str = "knowledge/snap_blocks.json", 
+                 patterns_path: str = "knowledge/patterns.json"):
+        self.knowledge_path = knowledge_path
+        self.patterns_path = patterns_path
+        self.blocks_db = {}
+        self.patterns_db = {}
+        self.load_knowledge_base()
+
+    def load_knowledge_base(self):
+        """Load block definitions and patterns from JSON files"""
+        try:
+            # Load block definitions
+            if os.path.exists(self.knowledge_path):
+                with open(self.knowledge_path, 'r') as f:
+                    self.blocks_db = json.load(f)
+                print(f"✓ Loaded {len(self.blocks_db.get('blocks', {}))} block definitions")
+            else:
+                print(f"⚠ Knowledge file not found: {self.knowledge_path}")
+                self.blocks_db = self._create_default_blocks()
+
+            # Load patterns
+            if os.path.exists(self.patterns_path):
+                with open(self.patterns_path, 'r') as f:
+                    self.patterns_db = json.load(f)
+                print(f"✓ Loaded {len(self.patterns_db.get('patterns', {}))} patterns")
+            else:
+                print(f"⚠ Patterns file not found: {self.patterns_path}")
+                self.patterns_db = self._create_default_patterns()
+
+        except Exception as e:
+            print(f"✗ Error loading knowledge base: {e}")
+            self.blocks_db = self._create_default_blocks()
+            self.patterns_db = self._create_default_patterns()
+
+    def _create_default_blocks(self) -> Dict[str, Any]:
+        """Create minimal default block definitions"""
+        return {
+            "blocks": {
+                "motion": {
+                    "forward": {
+                        "opcode": "forward",
+                        "category": "motion",
+                        "parameters": ["steps"],
+                        "default_values": {"steps": 10},
+                        "kid_explanation": "Makes sprite move forward!"
+                    },
+                    "changeYBy": {
+                        "opcode": "changeYBy",
+                        "category": "motion", 
+                        "parameters": ["dy"],
+                        "default_values": {"dy": 10},
+                        "kid_explanation": "Moves sprite up or down!"
+                    }
+                },
+                "events": {
+                    "receiveKey": {
+                        "opcode": "receiveKey",
+                        "category": "events",
+                        "parameters": ["key"],
+                        "default_values": {"key": "space"},
+                        "kid_explanation": "Starts when key is pressed!",
+                        "is_hat_block": True
+                    }
+                },
+                "control": {
+                    "doWait": {
+                        "opcode": "doWait",
+                        "category": "control",
+                        "parameters": ["duration"],
+                        "default_values": {"duration": 1},
+                        "kid_explanation": "Waits for some time!"
+                    }
+                }
+            }
+        }
+
+    def _create_default_patterns(self) -> Dict[str, Any]:
+        """Create minimal default patterns"""
+        return {
+            "patterns": {
+                "jump": {
+                    "blocks": [
+                        {"opcode": "changeYBy", "inputs": {"DY": 50}},
+                        {"opcode": "doWait", "inputs": {"DURATION": 0.3}},
+                        {"opcode": "changeYBy", "inputs": {"DY": -50}}
+                    ],
+                    "explanation": "Makes sprite jump up and come back down!",
+                    "difficulty": "beginner",
+                    "triggers": ["jump", "hop", "bounce up"]
+                },
+                "move_right": {
+                    "blocks": [
+                        {"opcode": "changeXBy", "inputs": {"DX": 10}}
+                    ],
+                    "explanation": "Moves sprite to the right!",
+                    "difficulty": "beginner",
+                    "triggers": ["move right", "go right", "right"]
+                }
+            }
+        }
+
+    def generate_blocks(self, intents: List[ParsedIntent], complexity: str = "beginner") -> BlockSequence:
+        """
+        Generate a sequence of Snap! blocks from parsed intents.
+
+        Args:
+            intents: List of parsed user intents
+            complexity: Difficulty level for educational appropriateness
+
+        Returns:
+            BlockSequence with blocks and educational explanation
+        """
+        if not intents:
+            return BlockSequence([], "No actions to create", complexity)
+
+        all_blocks = []
+        explanations = []
+
+        for intent in intents:
+            blocks = self._generate_blocks_for_intent(intent, complexity)
+            all_blocks.extend(blocks)
+            explanations.append(self._get_explanation_for_intent(intent))
+
+        # Connect blocks in sequence
+        for i in range(len(all_blocks) - 1):
+            all_blocks[i].next_block = f"block_{i+2:03d}"
+
+        explanation = " ".join(explanations)
+
+        return BlockSequence(
+            blocks=all_blocks,
+            explanation=explanation,
+            difficulty=complexity,
+            estimated_time=len(all_blocks) * 100
+        )
+
+    def _generate_blocks_for_intent(self, intent: ParsedIntent, complexity: str) -> List[SnapBlock]:
+        """Generate blocks for a single intent"""
+        blocks = []
+
+        # CRITICAL: If intent has a trigger, create the appropriate hat block first
+        if intent.trigger:
+            hat_block = self._create_hat_block_for_trigger(intent.trigger, intent.parameters)
+            if hat_block:
+                blocks.append(hat_block)
+
+        # Check if this matches a known pattern
+        pattern = self._find_matching_pattern(intent.action)
+        if pattern:
+            action_blocks = self._create_blocks_from_pattern(pattern, intent)
+            blocks.extend(action_blocks)
+            return blocks
+
+        # Try to create individual block
+        block_def = self._find_block_definition(intent.action)
+        if block_def:
+            action_blocks = [self._create_block_from_definition(block_def, intent)]
+            blocks.extend(action_blocks)
+            return blocks
+
+        # Fallback: create a simple say block
+        fallback_block = SnapBlock(
+            opcode="doSay",
+            category=BlockCategory.LOOKS,
+            inputs={"MESSAGE": f"I want to {intent.action}"},
+            description=f"Says '{intent.action}'"
+        )
+        blocks.append(fallback_block)
+
+        return blocks
+
+    def _create_hat_block_for_trigger(self, trigger: str, parameters: Dict[str, Any]) -> Optional[SnapBlock]:
+        """Create the appropriate hat block for a trigger"""
+        trigger_lower = trigger.lower()
+
+        # Map triggers to Snap! hat blocks
+        if "key_press" in trigger_lower or "key" in trigger_lower:
+            key = parameters.get("key", "space")
+            return SnapBlock(
+                opcode="receiveKey",
+                category=BlockCategory.EVENTS,
+                inputs={"KEY_OPTION": key},
+                description=f"When {key} key pressed",
+                is_hat_block=True
+            )
+
+        elif "sprite_click" in trigger_lower or "clicked" in trigger_lower:
+            return SnapBlock(
+                opcode="receiveClick",
+                category=BlockCategory.EVENTS,
+                inputs={},
+                description="When this sprite clicked",
+                is_hat_block=True
+            )
+
+        elif "flag_click" in trigger_lower or "flag" in trigger_lower:
+            return SnapBlock(
+                opcode="receiveGo",
+                category=BlockCategory.EVENTS,
+                inputs={},
+                description="When green flag clicked",
+                is_hat_block=True
+            )
+
+        elif "broadcast" in trigger_lower:
+            message = parameters.get("message", "message1")
+            return SnapBlock(
+                opcode="receiveMessage",
+                category=BlockCategory.EVENTS,
+                inputs={"MSG": message},
+                description=f"When I receive {message}",
+                is_hat_block=True
+            )
+
+        # Default: green flag for unknown triggers
+        return SnapBlock(
+            opcode="receiveGo",
+            category=BlockCategory.EVENTS,
+            inputs={},
+            description="When green flag clicked",
+            is_hat_block=True
+        )
+
+    def _find_matching_pattern(self, action: str) -> Optional[Dict[str, Any]]:
+        """Find a pattern that matches the action"""
+        action_lower = action.lower()
+        
+        for pattern_name, pattern_data in self.patterns_db.get("patterns", {}).items():
+            triggers = pattern_data.get("triggers", [pattern_name])
+            if any(trigger in action_lower for trigger in triggers):
+                return pattern_data
+        
+        return None
+
+    def _create_blocks_from_pattern(self, pattern: Dict[str, Any], intent: ParsedIntent) -> List[SnapBlock]:
+        """Create blocks from a pattern definition"""
+        blocks = []
+
+        for i, block_spec in enumerate(pattern.get("blocks", [])):
+            block = SnapBlock(
+                opcode=block_spec["opcode"],
+                category=BlockCategory(block_spec.get("category", "motion")),
+                inputs=block_spec.get("inputs", {}),
+                description=f"Pattern block {i+1}"
+            )
+            blocks.append(block)
+
+        return blocks
+
+    def _find_block_definition(self, action: str) -> Optional[Dict[str, Any]]:
+        """Find a block definition that matches the action"""
+        action_lower = action.lower()
+
+        for category, blocks in self.blocks_db.get("blocks", {}).items():
+            for block_name, block_def in blocks.items():
+                if block_name in action_lower or action_lower in block_name:
+                    return block_def
+
+        return None
+
+    def _create_block_from_definition(self, block_def: Dict[str, Any], intent: ParsedIntent) -> SnapBlock:
+        """Create a block from a definition"""
+        inputs = {}
+
+        # Apply default values and extract from intent parameters
+        for param, default_val in block_def.get("default_values", {}).items():
+            # Check various parameter formats from the new parser
+            param_value = default_val
+            if param in intent.parameters:
+                param_value = intent.parameters[param]
+            elif param.lower() in intent.parameters:
+                param_value = intent.parameters[param.lower()]
+
+            inputs[param.upper()] = param_value
+
+        return SnapBlock(
+            opcode=block_def["opcode"],
+            category=BlockCategory(block_def["category"]),
+            inputs=inputs,
+            description=block_def.get("kid_explanation", "A Snap! block"),
+            is_hat_block=block_def.get("is_hat_block", False)
+        )
+
+    def _get_explanation_for_intent(self, intent: ParsedIntent) -> str:
+        """Generate kid-friendly explanation for an intent"""
+        if intent.trigger:
+            return f"When {intent.trigger}, the {intent.subject} will {intent.action}!"
+        else:
+            return f"The {intent.subject} will {intent.action}!"
+
+    def format_for_snap(self, block_sequence: BlockSequence, target_sprite: str = "Sprite") -> Dict[str, Any]:
+        """
+        Format block sequence for Snap! bridge communication.
+        
+        Args:
+            block_sequence: Generated block sequence
+            target_sprite: Target sprite name
+            
+        Returns:
+            Dictionary formatted for WebSocket communication
+        """
+        formatted_blocks = []
+        
+        for i, block in enumerate(block_sequence.blocks):
+            formatted_block = {
+                "block_id": f"block_{i+1:03d}",
+                "opcode": block.opcode,
+                "category": block.category.value,
+                "inputs": block.inputs,
+                "is_hat_block": block.is_hat_block,
+                "next": block.next_block
+            }
+            formatted_blocks.append(formatted_block)
+        
+        return {
+            "command": "create_blocks",
+            "payload": {
+                "target_sprite": target_sprite,
+                "scripts": [{
+                    "script_id": "script_001",
+                    "position": {"x": 50, "y": 50},
+                    "blocks": formatted_blocks
+                }],
+                "visual_feedback": {
+                    "animate_creation": True,
+                    "highlight_duration_ms": 2000,
+                    "show_explanation": True,
+                    "explanation_text": block_sequence.explanation
+                }
+            }
+        }
+
+    def get_available_actions(self) -> List[str]:
+        """Get list of available actions/patterns"""
+        actions = []
+        
+        # Add patterns
+        for pattern_name, pattern_data in self.patterns_db.get("patterns", {}).items():
+            actions.extend(pattern_data.get("triggers", [pattern_name]))
+        
+        # Add individual blocks
+        for category, blocks in self.blocks_db.get("blocks", {}).items():
+            actions.extend(blocks.keys())
+        
+        return sorted(list(set(actions)))
+
+
+
+================================================
+FILE: mcp_server/tools/concept_explainer.py
+================================================
+# mcp_server/tools/concept_explainer.py - Educational Concept Explanations
+
+import json
+import os
+from typing import Dict, List, Optional, Any
+
+
+class ConceptExplainer:
+    """
+    Educational concept explainer for Snap! programming concepts.
+    
+    Provides age-appropriate explanations of programming concepts,
+    from basic blocks to advanced features like first-class functions.
+    """
+`NOT INCLUDED HERE for brevity`
+
+
+================================================
+FILE: mcp_server/tools/snap_communicator.py
+================================================
+# mcp_server/tools/snap_communicator.py - WebSocket Bridge Communication
+
+import asyncio
+import json
+import uuid
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+import websockets
+from websockets import ServerConnection
+
+
+class SnapBridgeCommunicator:
+  """
+  Manages WebSocket communication with Snap! browser extension.
+  Handles message routing, connection management, and response handling.
+  """
+
+  def __init__(self, host: str = "localhost", port: int = 8765, token_validator=None,
+               session_connected_callback=None, session_disconnected_callback=None):
+    self.host = host
+    self.port = port
+    self.server = None
+    self.token_validator = token_validator  # Function to validate tokens
+    self.session_connected_callback = session_connected_callback  # Called when session connects
+    self.session_disconnected_callback = session_disconnected_callback  # Called when session disconnects
+
+    # Connection management
+    # session_id -> websocket connection
+    self.connections: Dict[str, ServerConnection] = {}
+    # message_id -> future
+    self.pending_responses: Dict[str, asyncio.Future] = {}
+
+    # Statistics
+    self.stats = {
+      "total_connections": 0,
+      "total_messages": 0,
+      "total_commands": 0,
+      "errors": 0
+    }
+
+  async def start_server(self):
+    """Start WebSocket server"""
+    self.server = await websockets.serve(
+      self.handle_connection,
+      self.host,
+      self.port,
+      ping_interval=20,
+      ping_timeout=10,
+      close_timeout=10,
+      max_size=2**20,  # 1MB max message size
+      max_queue=32,    # Max queued messages
+      compression=None  # Disable compression for debugging
+    )
+    print(f"📡 WebSocket server started on ws://{self.host}:{self.port}")
+
+  async def handle_connection(self, websocket: ServerConnection):
+    """Handle new WebSocket connection from browser extension"""
+    session_id = None
+    client_ip = websocket.remote_address
+
+    print(f"🔌 New connection attempt from {client_ip}")
+
+    try:
+      # 1. Receive and parse the initial message
+      print(f"[{client_ip}] Waiting for 'connect' message...")
+      connect_msg = await asyncio.wait_for(websocket.recv(), timeout=10.0)
+      connect_data = json.loads(connect_msg)
+      print(f"[{client_ip}] Received data: {connect_data}")
+
+      # 2. Validate message type
+      if connect_data.get("type") != "connect":
+        await websocket.close(1002, "Protocol Error: Expected 'connect' message.")
+        print(f"[{client_ip}] ❌ Rejected: Did not send 'connect' message first.")
+        return
+
+      # 3. Validate token
+      token = connect_data.get("token")
+      if not token:
+        await websocket.close(1002, "Protocol Error: Missing token.")
+        print(f"[{client_ip}] ❌ Rejected: Missing token.")
+        return
+
+      print(f"[{client_ip}] Validating token: {token[:8]}...")
+      if self.token_validator:
+        # Here we assume token_validator finds the session_id
+        session_id, error_msg = self.token_validator(token)
+        if not session_id:
+          await websocket.close(1008, f"Invalid Token: {error_msg}")
+          print(f"[{client_ip}] ❌ Rejected: Token validation failed - {error_msg}")
+          return
+      else:
+        # Fallback if no validator is provided (not recommended for production)
+        import uuid
+        session_id = f"sess_dev_{uuid.uuid4().hex[:8]}"
+
+      print(f"[{client_ip}] ✅ Token validated. Session ID: {session_id}")
+
+      # 4. Store connection and notify server
+      self.connections[session_id] = websocket
+      self.stats["total_connections"] += 1
+      print(f"[{client_ip}] Session '{session_id}' connection stored.")
+
+      if self.session_connected_callback:
+        print(f"[{client_ip}] Firing session_connected_callback for '{session_id}'...")
+        self.session_connected_callback(session_id)
+        print(f"[{client_ip}] ✅ session_connected_callback completed.")
+
+      # 5. Send acknowledgment to the client
+      print(f"[{client_ip}] Sending 'connect_ack' to client for session '{session_id}'...")
+      await websocket.send(json.dumps({
+        "type": "connect_ack",
+        "status": "accepted",
+        "session_id": session_id,
+        "server_capabilities": {
+          "max_message_size": 1048576,
+          "supported_commands": [
+            "create_blocks",
+            "read_project",
+            "execute_script",
+            "inspect_state",
+            "delete_blocks",
+            "create_custom_block",
+            "highlight_blocks",
+            "export_project"
+          ],
+          "protocol_version": "1.0.0"
+        },
+        "keep_alive_interval": 30000
+      }))
+      print(f"[{client_ip}] ✅ 'connect_ack' sent. Connection fully established for '{session_id}'.")
+
+      # 6. Begin main message handling loop
+      async for message in websocket:
+        if isinstance(message, bytes):
+          message_str = message.decode('utf-8')
+        else:
+          message_str = str(message)
+        await self.handle_message(session_id, message_str)
+
+    except json.JSONDecodeError:
+      print(f"[{client_ip}] ❌ Connection closed: Invalid JSON.")
+      await websocket.close(1002, "Protocol Error: Invalid JSON")
+    except asyncio.TimeoutError:
+      print(f"[{client_ip}] ❌ Connection closed: Timeout waiting for connect message.")
+      await websocket.close(1008, "Timeout")
+    except websockets.exceptions.ConnectionClosed as e:
+      print(f"[{client_ip}] 🔌 Connection closed normally (Code: {e.code}, Reason: {e.reason})")
+    except Exception as e:
+      # This will now catch any unexpected errors with a full traceback
+      import traceback
+      print(f"[{client_ip}] ❌ UNEXPECTED ERROR in connection handler for session '{session_id}': {e}")
+      traceback.print_exc()
+      await websocket.close(1011, "Internal Server Error")
+      self.stats["errors"] += 1
+    finally:
+      # Cleanup
+      if session_id and session_id in self.connections:
+        print(f"[{client_ip}] Cleaning up connection for session '{session_id}'...")
+        del self.connections[session_id]
+        if self.session_disconnected_callback:
+          self.session_disconnected_callback(session_id)
+        print(f"[{client_ip}] Cleanup complete for session '{session_id}'.")
+
+  async def handle_message(self, session_id: str, message: str):
+    """Handle incoming message from browser extension"""
+    try:
+      data = json.loads(message)
+      self.stats["total_messages"] += 1
+
+      message_type = data.get("type")
+      message_id = data.get("message_id")
+
+      if message_type == "response":
+        # This is a response to a command we sent
+        if message_id in self.pending_responses:
+          future = self.pending_responses[message_id]
+          future.set_result(data)
+          del self.pending_responses[message_id]
+
+      elif message_type == "event":
+        # Unsolicited event from browser
+        await self.handle_event(session_id, data)
+
+      elif message_type == "ping":
+        # Heartbeat - respond with pong
+        websocket = self.connections.get(session_id)
+        if websocket:
+          await websocket.send(json.dumps({
+            "type": "pong",
+            "timestamp": datetime.utcnow().isoformat(),
+            "latency_ms": 0  # Calculate if needed
+          }))
+
+    except json.JSONDecodeError:
+      print(f"✗ Invalid JSON from {session_id}")
+      self.stats["errors"] += 1
+    except Exception as e:
+      print(f"✗ Error handling message: {e}")
+      self.stats["errors"] += 1
+
+  async def handle_event(self, session_id: str, event_data: Dict[str, Any]):
+    """Handle unsolicited events from browser (e.g., user actions)"""
+    event_type = event_data.get("event_type")
+    print(f"📢 Event from {session_id}: {event_type}")
+
+    # Could store events, trigger callbacks, etc.
+    # For now, just log
+
+  def is_connected(self, session_id: str) -> bool:
+    """Check if session is connected"""
+    return session_id in self.connections
+
+  async def check_snap_ready(self, session_id: str) -> bool:
+    """Check if Snap! IDE is loaded and ready"""
+    try:
+      result = await self.send_command(
+        session_id,
+        "inspect_state",
+        {"query": {"type": "snap_ready"}}
+      )
+      return result.get("status") == "success"
+    except:
+      return False
+
+  async def send_command(
+    self,
+    session_id: str,
+    command: str,
+    payload: Dict[str, Any],
+    timeout: float = 5.0
+  ) -> Dict[str, Any]:
+    """
+    Send command to browser extension and wait for response.
+    
+    Args:
+      session_id: Target session
+      command: Command name
+      payload: Command payload
+      timeout: Response timeout in seconds
+    
+    Returns:
+      Response from browser extension
+    """
+    if session_id not in self.connections:
+      raise ConnectionError(f"Session {session_id} not connected")
+
+    websocket = self.connections[session_id]
+    message_id = f"msg_{uuid.uuid4().hex[:12]}"
+
+    # Create future for response
+    future = asyncio.Future()
+    self.pending_responses[message_id] = future
+
+    # Send command
+    command_message = {
+      "message_id": message_id,
+      "type": "command",
+      "timestamp": datetime.utcnow().isoformat(),
+      "session_id": session_id,
+      "command": command,
+      "payload": payload,
+      "options": {
+        "timeout_ms": int(timeout * 1000),
+        "retry_on_failure": False,
+        "require_confirmation": False
+      }
+    }
+
+    await websocket.send(json.dumps(command_message))
+    self.stats["total_commands"] += 1
+
+    # Wait for response
+    try:
+      response = await asyncio.wait_for(future, timeout=timeout)
+      return response
+    except asyncio.TimeoutError:
+      # Cleanup
+      if message_id in self.pending_responses:
+        del self.pending_responses[message_id]
+      raise TimeoutError(f"Command {command} timed out")
+
+  # ========================================================================
+  # High-level command methods
+  # ========================================================================
+
+  async def create_blocks(
+    self,
+    session_id: str,
+    snap_spec: Dict[str, Any],
+    animate: bool = True
+  ) -> Dict[str, Any]:
+    """Create blocks in Snap! IDE"""
+
+    if "payload" not in snap_spec:
+        raise ValueError("Invalid snap_spec: dictionary is missing the 'payload' key.")
+
+    # This is the actual payload that the JavaScript `createBlocks` function expects.
+    payload_to_send = snap_spec["payload"]
+
+    # The block_generator.py already adds a visual_feedback section.
+    # We can simply update the 'animate_creation' flag on it.
+    if "visual_feedback" in payload_to_send:
+        payload_to_send["visual_feedback"]["animate_creation"] = animate
+    
+    # Send the correct command name and the UNWRAPPED payload.
+    response = await self.send_command(session_id, "create_blocks", payload_to_send)
+    return response.get("payload", {})
+
+
+  async def read_project(
+    self,
+    session_id: str,
+    detail_level: str = "summary"
+  ) -> Dict[str, Any]:
+    """Read current Snap! project state"""
+    payload = {
+      "include": {
+        "sprites": True,
+        "scripts": True,
+        "variables": True,
+        "custom_blocks": True,
+        "stage": True
+      },
+      "detail_level": detail_level
+    }
+
+    response = await self.send_command(session_id, "read_project", payload)
+    return response.get("payload", {}).get("project", {})
+
+  async def execute_javascript(
+    self,
+    session_id: str,
+    code: str,
+    sandbox: bool = True
+  ) -> Dict[str, Any]:
+    """Execute JavaScript code in Snap! context"""
+    payload = {
+      "javascript_code": code,
+      "return_result": True,
+      "sandbox_mode": sandbox
+    }
+
+    response = await self.send_command(session_id, "execute_script", payload)
+    return response.get("payload", {})
+
+  async def inspect_state(
+    self,
+    session_id: str,
+    query: Dict[str, Any]
+  ) -> Dict[str, Any]:
+    """Inspect specific Snap! IDE state"""
+    payload = {"query": query}
+
+    response = await self.send_command(session_id, "inspect_state", payload)
+    return response.get("payload", {})
+
+  async def delete_blocks(
+    self,
+    session_id: str,
+    target_sprite: str,
+    selection: Dict[str, Any]
+  ) -> Dict[str, Any]:
+    """Delete blocks or scripts"""
+    payload = {
+      "target_sprite": target_sprite,
+      "selection": selection,
+      "options": {
+        "confirm_before_delete": False,
+        "create_undo_snapshot": True
+      }
+    }
+
+    response = await self.send_command(session_id, "delete_blocks", payload)
+    return response.get("payload", {})
+
+  async def create_custom_block(
+    self,
+    session_id: str,
+    block_spec: Dict[str, Any]
+  ) -> Dict[str, Any]:
+    """Create custom Snap! block"""
+    response = await self.send_command(session_id, "create_custom_block", block_spec)
+    return response.get("payload", {})
+
+  async def highlight_blocks(
+    self,
+    session_id: str,
+    block_ids: List[str],
+    duration_ms: int = 2000,
+    tooltip: Optional[str] = None
+  ) -> Dict[str, Any]:
+    """Highlight specific blocks for visual feedback"""
+    payload = {
+      "block_ids": block_ids,
+      "highlight_style": {
+        "color": "#FFD700",
+        "duration_ms": duration_ms,
+        "pulse": True
+      }
+    }
+
+    if tooltip:
+      payload["show_tooltip"] = {
+        "text": tooltip,
+        "position": "above"
+      }
+
+    response = await self.send_command(session_id, "highlight_blocks", payload)
+    return response.get("payload", {})
+
+  async def export_project(
+    self,
+    session_id: str,
+    format: str = "xml",
+    include_media: bool = False
+  ) -> Dict[str, Any]:
+    """Export current Snap! project"""
+    payload = {
+      "format": format,
+      "include_media": include_media,
+      "compress": False
+    }
+
+    response = await self.send_command(session_id, "export_project", payload)
+    return response.get("payload", {})
+
+  def get_stats(self) -> Dict[str, Any]:
+    """Get communication statistics"""
+    return {
+      **self.stats,
+      "active_connections": len(self.connections),
+      "pending_responses": len(self.pending_responses)
+    }
+
+
+# ============================================================================
+# Example Usage
+# ============================================================================
+
+async def example_usage():
+  """Example of how to use the communicator"""
+
+  # Initialize communicator
+  communicator = SnapBridgeCommunicator()
+
+  # Start server
+  await communicator.start_server()
+
+  # Wait for connection (in real usage, this happens automatically)
+  print("Waiting for browser connection...")
+  await asyncio.sleep(5)
+
+  # Assume session_id from connection
+  session_id = "sess_example123"
+
+  if communicator.is_connected(session_id):
+    # Create blocks
+    snap_spec = {
+      "target_sprite": "Sprite",
+      "scripts": [
+        {
+          "script_id": "script_001",
+          "position": {"x": 50, "y": 50},
+          "blocks": [
+            {
+              "block_id": "block_001",
+              "opcode": "receiveKey",
+              "category": "events",
+              "inputs": {"KEY": "space"},
+              "is_hat_block": True,
+              "next": "block_002"
+            },
+            {
+              "block_id": "block_002",
+              "opcode": "changeYBy",
+              "category": "motion",
+              "inputs": {"DY": 50},
+              "next": None
+            }
+          ]
+        }
+      ]
+    }
+
+    result = await communicator.create_blocks(session_id, snap_spec)
+    print(f"Created {result.get('blocks_created')} blocks!")
+
+    # Read project state
+    project = await communicator.read_project(session_id)
+    print(f"Project has {len(project.get('sprites', []))} sprites")
+
+    # Get stats
+    stats = communicator.get_stats()
+    print(f"Total commands: {stats['total_commands']}")
+
+
+if __name__ == "__main__":
+  asyncio.run(example_usage())
+
+
+
+================================================
+FILE: mcp_server/tools/tutorial_creator.py
+================================================
+# mcp_server/tools/tutorial_creator.py - Step-by-Step Tutorial Generator
+
+import json
+import os
+from typing import Dict, List, Optional, Any
+
+
+class TutorialCreator:
+    """
+    Creates step-by-step tutorials for Snap! programming projects.
+    
+    Generates structured learning experiences with clear objectives,
+    progressive steps, and educational explanations.
+    """
+
+`NOT INCLUDED HERE for brevity`
+
+
+================================================
+FILE: snap_bridge/block_creator.js
+================================================
+// snap_bridge/block_creator.js - Snap! Block Creation and Manipulation
+
+/**
+ * SnapBlockCreator
+ * 
+ * Handles the creation, manipulation, and deletion of Snap! blocks
+ * using the Snap! internal APIs.
+ */
+
+class SnapBlockCreator {
+    constructor(apiWrapper) {
+        if (!apiWrapper) {
+            throw new Error("SnapBlockCreator requires an instance of SnapAPIWrapper.");
+        }
+        this.apiWrapper = apiWrapper;
+        this.ide = null;
+        this.stage = null;
+        this.currentSprite = null;
+        this.blockCount = 0;
+    }
+
+    /**
+     * Get the current IDE instance
+     */
+    getIDE() {
+        if (!this.ide) {
+            this.ide = world.children[0];
+        }
+        return this.ide;
+    }
+
+    /**
+     * Get the current stage
+     */
+    getStage() {
+        if (!this.stage) {
+            this.stage = this.getIDE().stage;
+        }
+        return this.stage;
+    }
+
+    /**
+     * Get or set current sprite
+     */
+    getCurrentSprite(spriteName = null) {
+        const ide = this.getIDE();
+        
+        if (spriteName) {
+            // Find sprite by name
+            const sprite = ide.sprites.detect(s => s.name === spriteName);
+            if (sprite) {
+                ide.selectSprite(sprite);
+                this.currentSprite = sprite;
+            } else {
+                throw new Error(`Sprite '${spriteName}' not found`);
+            }
+        } else {
+            this.currentSprite = ide.currentSprite;
+        }
+        
+        return this.currentSprite;
+    }
+
+    /**
+     * Create blocks from specification
+     */
+    async createBlocks(payload) {
+        try {
+            const { target_sprite, scripts, visual_feedback } = payload;
+            
+            // Get target sprite
+            const sprite = this.getCurrentSprite(target_sprite);
+            const scriptsArea = sprite.scripts;
+            
+            let totalBlocksCreated = 0;
+            let scriptsCreated = 0;
+            const createdBlockIds = [];
+            
+            // Process each script
+            for (const scriptSpec of scripts) {
+                const { script_id, position, blocks } = scriptSpec;
+                
+                if (!blocks || blocks.length === 0) {
+                    continue;
+                }
+                
+                // Create the script
+                const scriptBlocks = await this.createScript(blocks, position);
+                totalBlocksCreated += scriptBlocks.length;
+                scriptsCreated++;
+                
+                // Add block IDs
+                scriptBlocks.forEach(block => {
+                    if (block.blockId) {
+                        createdBlockIds.push(block.blockId);
+                    }
+                });
+                
+                // Add visual feedback if requested
+                if (visual_feedback && visual_feedback.animate_creation) {
+                    await this.animateBlockCreation(scriptBlocks, visual_feedback);
+                }
+            }
+            
+            // Refresh the IDE
+            this.getIDE().flushBlocksCache();
+            this.getIDE().refreshPalette();
+            
+            return {
+                status: 'success',
+                blocks_created: totalBlocksCreated,
+                scripts_created: scriptsCreated,
+                execution_time_ms: Date.now() - performance.now(),
+                created_block_ids: createdBlockIds,
+                sprite_info: {
+                    name: sprite.name,
+                    position: { x: sprite.xPosition(), y: sprite.yPosition() },
+                    total_scripts: sprite.scripts.children.length
+                }
+            };
+            
+        } catch (error) {
+            console.error('Block creation error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create a script from block specifications
+     */
+    async createScript(blockSpecs, position = { x: 50, y: 50 }) {
+        const sprite = this.getCurrentSprite();
+        const createdBlocks = [];
+        let previousBlock = null;
+        
+        for (let i = 0; i < blockSpecs.length; i++) {
+            const blockSpec = blockSpecs[i];
+            const block = await this.createSingleBlock(blockSpec, sprite);
+            
+            if (block) {
+                createdBlocks.push(block);
+                
+                // Connect to previous block if not a hat block
+                if (previousBlock && !blockSpec.is_hat_block) {
+                    this.connectBlocks(previousBlock, block);
+                }
+                
+                previousBlock = block;
+            }
+        }
+        
+        // Position the first block (hat block or first block)
+        if (createdBlocks.length > 0) {
+            const firstBlock = createdBlocks[0];
+            firstBlock.setPosition(new Point(position.x, position.y));
+            sprite.scripts.add(firstBlock);
+        }
+        
+        return createdBlocks;
+    }
+
+    /**
+     * Create a single block from specification
+     */
+    async createSingleBlock(blockSpec, sprite) {
+        try {
+            const { opcode, category, inputs, is_hat_block, block_id } = blockSpec;
+            
+            // Create the block using Snap!'s block creation system
+            let block;
+            
+            if (is_hat_block) {
+                // Create hat block (event block)
+                block = sprite.blockForSelector(opcode);
+            } else {
+                // Create regular block
+                block = sprite.blockForSelector(opcode);
+            }
+            
+            if (!block) {
+                console.warn(`Could not create block for opcode: ${opcode}`);
+                return null;
+            }
+            
+            // Set inputs
+            if (inputs && Object.keys(inputs).length > 0) {
+                this.setBlockInputs(block, inputs);
+            }
+            
+            // Store block ID for reference
+            if (block_id) {
+                block.blockId = block_id;
+            }
+            
+            return block;
+            
+        } catch (error) {
+            console.error(`Error creating block ${blockSpec.opcode}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Set inputs for a block
+     */
+    setBlockInputs(block, inputs) {
+        try {
+            const inputSlots = block.inputs();
+            
+            Object.entries(inputs).forEach(([inputName, inputValue], index) => {
+                if (inputSlots[index]) {
+                    if (typeof inputValue === 'string') {
+                        inputSlots[index].setContents(inputValue);
+                    } else if (typeof inputValue === 'number') {
+                        inputSlots[index].setContents(inputValue);
+                    } else {
+                        // Handle complex inputs (blocks, etc.)
+                        inputSlots[index].setContents(inputValue);
+                    }
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error setting block inputs:', error);
+        }
+    }
+
+    /**
+     * Connect two blocks
+     */
+    connectBlocks(topBlock, bottomBlock) {
+        try {
+            if (topBlock && bottomBlock) {
+                topBlock.nextBlock(bottomBlock);
+            }
+        } catch (error) {
+            console.error('Error connecting blocks:', error);
+        }
+    }
+
+    /**
+     * Delete blocks by specification
+     */
+    async deleteBlocks(payload) {
+        try {
+            const { target_sprite, selection } = payload;
+            const sprite = this.getCurrentSprite(target_sprite);
+            
+            let deletedCount = 0;
+            
+            if (selection.type === 'by_id') {
+                // Delete specific blocks by ID
+                selection.block_ids.forEach(blockId => {
+                    const block = this.findBlockById(sprite, blockId);
+                    if (block) {
+                        block.destroy();
+                        deletedCount++;
+                    }
+                });
+            } else if (selection.type === 'all_scripts') {
+                // Delete all scripts
+                sprite.scripts.children.slice().forEach(script => {
+                    script.destroy();
+                    deletedCount++;
+                });
+            }
+            
+            return {
+                status: 'success',
+                blocks_deleted: deletedCount
+            };
+            
+        } catch (error) {
+            console.error('Block deletion error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create custom block
+     */
+    async createCustomBlock(payload) {
+        try {
+            const { block_name, parameters, definition, category, scope } = payload;
+            const sprite = this.getCurrentSprite();
+            
+            // Create custom block definition
+            const customBlock = new CustomBlockDefinition(
+                block_name,
+                sprite,
+                scope === 'global'
+            );
+            
+            // Set parameters
+            if (parameters && parameters.length > 0) {
+                parameters.forEach(param => {
+                    customBlock.addParameter(param.name, param.type);
+                });
+            }
+            
+            // Set definition (body)
+            if (definition && definition.length > 0) {
+                const bodyBlocks = await this.createScript(definition);
+                customBlock.body = new Context(null, bodyBlocks[0]);
+            }
+            
+            // Set category
+            customBlock.category = category || 'custom';
+            
+            // Add to sprite
+            sprite.customBlocks.push(customBlock);
+            
+            // Refresh palette
+            this.getIDE().flushBlocksCache();
+            this.getIDE().refreshPalette();
+            
+            return {
+                status: 'success',
+                block_name: block_name,
+                message: `Custom block '${block_name}' created successfully`
+            };
+            
+        } catch (error) {
+            console.error('Custom block creation error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find block by ID
+     */
+    findBlockById(sprite, blockId) {
+        const scripts = sprite.scripts.children;
+        
+        for (const script of scripts) {
+            const found = this.searchBlockInScript(script, blockId);
+            if (found) return found;
+        }
+        
+        return null;
+    }
+
+    /**
+     * Search for block in script recursively
+     */
+    searchBlockInScript(block, blockId) {
+        if (block.blockId === blockId) {
+            return block;
+        }
+        
+        // Search in nested blocks
+        if (block.inputs) {
+            const inputs = block.inputs();
+            for (const input of inputs) {
+                if (input instanceof BlockMorph) {
+                    const found = this.searchBlockInScript(input, blockId);
+                    if (found) return found;
+                }
+            }
+        }
+        
+        // Search in next block
+        if (block.nextBlock && block.nextBlock()) {
+            return this.searchBlockInScript(block.nextBlock(), blockId);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Animate block creation
+     */
+    async animateBlockCreation(blocks, visualFeedback) {
+        if (!visualFeedback.animate_creation) return;
+        
+        for (const block of blocks) {
+            // Simple animation: highlight the block
+            if (block && block.flash) {
+                block.flash();
+            }
+            
+            // Wait a bit between animations
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        // Show explanation if requested
+        if (visualFeedback.show_explanation && visualFeedback.explanation_text) {
+            this.showExplanation(visualFeedback.explanation_text);
+        }
+    }
+
+    /**
+     * Show explanation bubble
+     */
+    showExplanation(text) {
+        const ide = this.getIDE();
+        if (ide && ide.inform) {
+            ide.inform('Snap! Educational Assistant', text);
+        }
+    }
+}
+
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = SnapBlockCreator;
+}
+
+
+
+================================================
+FILE: snap_bridge/bridge.js
+================================================
+// snap_bridge/bridge.js - Main Snap! Bridge for MCP Communication
+
+/**
+ * Snap! Educational Bridge
+ * 
+ * This is the main bridge that connects the MCP server to the Snap! IDE.
+ * It handles WebSocket communication, block creation, and visual feedback.
+ */
+
+class SnapBridge {
+    constructor() {
+        this.websocket = null;
+        this.isConnected = false;
+        this.sessionId = null;
+        this.messageHandlers = new Map();
+        this.pendingMessages = new Map();
+        this.messageId = 0;
+        
+        // Initialize components
+        this.blockCreator = new SnapBlockCreator();
+        this.apiWrapper = new SnapAPIWrapper();
+        this.visualFeedback = new VisualFeedback();
+        
+        this.init();
+    }
+
+    /**
+     * Initialize the bridge
+     */
+    init() {
+        console.log('🚀 Initializing Snap! Educational Bridge...');
+        
+        // Check if we're in Snap! environment
+        if (!this.isSnapEnvironment()) {
+            console.error('❌ Not running in Snap! environment');
+            return;
+        }
+
+        // Set up message handlers
+        this.setupMessageHandlers();
+        
+        // Wait for Snap! to be fully loaded
+        this.waitForSnapReady().then(() => {
+            console.log('✅ Snap! is ready');
+            this.showConnectionUI();
+        });
+    }
+
+    /**
+     * Check if we're running in Snap! environment
+     */
+    isSnapEnvironment() {
+        return typeof world !== 'undefined' && 
+               typeof SpriteMorph !== 'undefined' && 
+               typeof IDE_Morph !== 'undefined';
+    }
+
+    /**
+     * Wait for Snap! to be fully loaded
+     */
+    async waitForSnapReady() {
+        return new Promise((resolve) => {
+            const checkReady = () => {
+                if (world && world.children && world.children[0] && world.children[0].stage) {
+                    resolve();
+                } else {
+                    setTimeout(checkReady, 100);
+                }
+            };
+            checkReady();
+        });
+    }
+
+    /**
+     * Show connection UI to user
+     */
+    showConnectionUI() {
+        // Create a simple connection dialog
+        const dialog = document.createElement('div');
+        dialog.id = 'snap-bridge-connection';
+        dialog.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 10000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            max-width: 300px;
+        `;
+        
+        dialog.innerHTML = `
+            <div style="margin-bottom: 10px;">
+                <strong>🎓 Snap! Educational Assistant</strong>
+            </div>
+            <div style="margin-bottom: 10px;">
+                Enter your connection code:
+            </div>
+            <input type="text" id="connection-token" placeholder="Enter code..." 
+                   style="width: 100%; padding: 5px; margin-bottom: 10px; border: none; border-radius: 4px;">
+            <button id="connect-btn" style="background: #45a049; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                Connect
+            </button>
+            <button id="close-btn" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-left: 5px;">
+                Close
+            </button>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        // Add event listeners
+        document.getElementById('connect-btn').onclick = () => {
+            const token = document.getElementById('connection-token').value.trim();
+            if (token) {
+                this.connect(token);
+            }
+        };
+        
+        document.getElementById('close-btn').onclick = () => {
+            dialog.remove();
+        };
+        
+        // Focus on input
+        document.getElementById('connection-token').focus();
+    }
+
+    /**
+     * Connect to MCP server with token
+     */
+    async connect(token) {
+        try {
+            console.log('🔌 Connecting to MCP server...');
+            
+            this.websocket = new WebSocket('ws://localhost:8765');
+            
+            this.websocket.onopen = () => {
+                console.log('✅ WebSocket connected');
+                this.sendConnectionRequest(token);
+            };
+            
+            this.websocket.onmessage = (event) => {
+                this.handleMessage(JSON.parse(event.data));
+            };
+            
+            this.websocket.onclose = () => {
+                console.log('🔌 WebSocket disconnected');
+                this.isConnected = false;
+                this.showReconnectUI();
+            };
+            
+            this.websocket.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+                this.showErrorUI('Connection failed. Make sure MCP server is running.');
+            };
+            
+        } catch (error) {
+            console.error('❌ Connection error:', error);
+            this.showErrorUI('Failed to connect to server.');
+        }
+    }
+
+    /**
+     * Send connection request with token
+     */
+    sendConnectionRequest(token) {
+        const message = {
+            type: 'connect',
+            version: '1.0.0',
+            token: token,
+            client_info: {
+                extension_version: '0.1.0',
+                browser: navigator.userAgent,
+                snap_version: this.apiWrapper.getSnapVersion(),
+                timestamp: new Date().toISOString()
+            }
+        };
+        
+        this.websocket.send(JSON.stringify(message));
+    }
+
+    /**
+     * Handle incoming WebSocket messages
+     */
+    handleMessage(message) {
+        console.log('📨 Received message:', message.type);
+        
+        switch (message.type) {
+            case 'connect_ack':
+                this.handleConnectionAck(message);
+                break;
+            case 'connect_error':
+                this.handleConnectionError(message);
+                break;
+            case 'command':
+                this.handleCommand(message);
+                break;
+            case 'ping':
+                this.handlePing(message);
+                break;
+            default:
+                console.warn('⚠️ Unknown message type:', message.type);
+        }
+    }
+
+    /**
+     * Handle connection acknowledgment
+     */
+    handleConnectionAck(message) {
+        if (message.status === 'accepted') {
+            this.isConnected = true;
+            this.sessionId = message.session_id;
+            console.log('✅ Connected to MCP server');
+            
+            // Update UI
+            this.showSuccessUI('Connected! Ready to create Snap! programs.');
+            
+            // Remove connection dialog
+            const dialog = document.getElementById('snap-bridge-connection');
+            if (dialog) {
+                setTimeout(() => dialog.remove(), 2000);
+            }
+        }
+    }
+
+    /**
+     * Handle connection error
+     */
+    handleConnectionError(message) {
+        console.error('❌ Connection rejected:', message.error);
+        this.showErrorUI(message.error.message || 'Connection failed');
+    }
+
+    /**
+     * Handle incoming commands
+     */
+    async handleCommand(message) {
+        try {
+            let result;
+            
+            switch (message.command) {
+                case 'create_blocks':
+                    result = await this.blockCreator.createBlocks(message.payload);
+                    break;
+                case 'read_project':
+                    result = await this.apiWrapper.readProject(message.payload);
+                    break;
+                case 'execute_script':
+                    result = await this.apiWrapper.executeScript(message.payload);
+                    break;
+                case 'inspect_state':
+                    result = await this.apiWrapper.inspectState(message.payload);
+                    break;
+                case 'delete_blocks':
+                    result = await this.blockCreator.deleteBlocks(message.payload);
+                    break;
+                case 'create_custom_block':
+                    result = await this.blockCreator.createCustomBlock(message.payload);
+                    break;
+                case 'highlight_blocks':
+                    result = await this.visualFeedback.highlightBlocks(message.payload);
+                    break;
+                case 'export_project':
+                    result = await this.apiWrapper.exportProject(message.payload);
+                    break;
+                default:
+                    throw new Error(`Unknown command: ${message.command}`);
+            }
+            
+            // Send success response
+            this.sendResponse(message.message_id, 'success', result);
+            
+        } catch (error) {
+            console.error('❌ Command error:', error);
+            this.sendResponse(message.message_id, 'error', {
+                code: 'COMMAND_FAILED',
+                message: error.message,
+                details: error.stack
+            });
+        }
+    }
+
+    /**
+     * Handle ping messages
+     */
+    handlePing(message) {
+        const pong = {
+            type: 'pong',
+            timestamp: new Date().toISOString(),
+            latency_ms: Date.now() - new Date(message.timestamp).getTime()
+        };
+        this.websocket.send(JSON.stringify(pong));
+    }
+
+    /**
+     * Send response to MCP server
+     */
+    sendResponse(messageId, status, payload) {
+        const response = {
+            message_id: messageId,
+            type: 'response',
+            status: status,
+            timestamp: new Date().toISOString(),
+            payload: payload
+        };
+        
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify(response));
+        }
+    }
+
+    /**
+     * Setup message handlers
+     */
+    setupMessageHandlers() {
+        // Add any additional message handlers here
+    }
+
+    /**
+     * Show success UI
+     */
+    showSuccessUI(message) {
+        this.showNotification(message, '#4CAF50');
+    }
+
+    /**
+     * Show error UI
+     */
+    showErrorUI(message) {
+        this.showNotification(message, '#f44336');
+    }
+
+    /**
+     * Show reconnect UI
+     */
+    showReconnectUI() {
+        this.showNotification('Connection lost. Please reconnect.', '#ff9800');
+    }
+
+    /**
+     * Show notification
+     */
+    showNotification(message, color) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${color};
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 10001;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            max-width: 300px;
+        `;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+    }
+}
+
+// Initialize bridge when page loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.snapBridge = new SnapBridge();
+    });
+} else {
+    window.snapBridge = new SnapBridge();
+}
+
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = SnapBridge;
+}
+
+
+
+================================================
+FILE: snap_bridge/snap_api_wrapper.js
+================================================
+// snap_bridge/snap_api_wrapper.js - Snap! API Wrapper and Utilities
+
+/**
+ * SnapAPIWrapper
+ * 
+ * Provides high-level wrapper functions for Snap! internal APIs
+ * and utilities for reading project state and executing scripts.
+ */
+
+class SnapAPIWrapper {
+    constructor() {
+        this.ide = null;
+        this.stage = null;
+    }
+
+    /**
+     * Get the current IDE instance
+     */
+    getIDE() {
+        if (!this.ide) {
+            this.ide = world.children[0];
+        }
+        return this.ide;
+    }
+
+    /**
+     * Get the current stage
+     */
+    getStage() {
+        if (!this.stage) {
+            this.stage = this.getIDE().stage;
+        }
+        return this.stage;
+    }
+
+    /**
+     * Get Snap! version
+     */
+    getSnapVersion() {
+        try {
+            return this.getIDE().version || 'unknown';
+        } catch (error) {
+            return 'unknown';
+        }
+    }
+
+    /**
+     * Read current project state
+     */
+    async readProject(payload) {
+        try {
+            const { include, detail_level } = payload;
+            const ide = this.getIDE();
+            const stage = this.getStage();
+            
+            const project = {
+                name: ide.projectName || 'Untitled',
+                sprites: [],
+                stage: {},
+                global_variables: [],
+                custom_blocks: []
+            };
+
+            // Include sprites information
+            if (include.sprites) {
+                project.sprites = this.getSpritesInfo(detail_level);
+            }
+
+            // Include stage information
+            if (include.stage) {
+                project.stage = this.getStageInfo(detail_level);
+            }
+
+            // Include variables
+            if (include.variables) {
+                project.global_variables = this.getGlobalVariables();
+            }
+
+            // Include custom blocks
+            if (include.custom_blocks) {
+                project.custom_blocks = this.getCustomBlocks();
+            }
+
+            return project;
+
+        } catch (error) {
+            console.error('Error reading project:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get sprites information
+     */
+    getSpritesInfo(detailLevel = 'summary') {
+        const ide = this.getIDE();
+        const sprites = [];
+
+        ide.sprites.asArray().forEach(sprite => {
+            const spriteInfo = {
+                name: sprite.name,
+                costume_count: sprite.costumes.length(),
+                script_count: sprite.scripts.children.length,
+                position: {
+                    x: sprite.xPosition(),
+                    y: sprite.yPosition()
+                },
+                size: sprite.size,
+                visible: sprite.isVisible,
+                direction: sprite.heading
+            };
+
+            if (detailLevel === 'detailed' || detailLevel === 'full') {
+                spriteInfo.costumes = sprite.costumes.asArray().map(costume => ({
+                    name: costume.name,
+                    width: costume.width(),
+                    height: costume.height()
+                }));
+
+                spriteInfo.sounds = sprite.sounds.asArray().map(sound => ({
+                    name: sound.name,
+                    duration: sound.duration || 0
+                }));
+            }
+
+            if (detailLevel === 'full') {
+                spriteInfo.scripts = this.getScriptsInfo(sprite);
+                spriteInfo.variables = this.getSpriteVariables(sprite);
+            }
+
+            sprites.push(spriteInfo);
+        });
+
+        return sprites;
+    }
+
+    /**
+     * Get stage information
+     */
+    getStageInfo(detailLevel = 'summary') {
+        const stage = this.getStage();
+        
+        const stageInfo = {
+            costume_count: stage.costumes.length(),
+            script_count: stage.scripts.children.length,
+            current_costume: stage.costume.name
+        };
+
+        if (detailLevel === 'detailed' || detailLevel === 'full') {
+            stageInfo.costumes = stage.costumes.asArray().map(costume => ({
+                name: costume.name,
+                width: costume.width(),
+                height: costume.height()
+            }));
+        }
+
+        if (detailLevel === 'full') {
+            stageInfo.scripts = this.getScriptsInfo(stage);
+        }
+
+        return stageInfo;
+    }
+
+    /**
+     * Get scripts information for a sprite or stage
+     */
+    getScriptsInfo(target) {
+        const scripts = [];
+        
+        target.scripts.children.forEach((script, index) => {
+            const scriptInfo = {
+                id: `script_${index}`,
+                position: {
+                    x: script.position().x,
+                    y: script.position().y
+                },
+                blocks: this.getBlocksInfo(script)
+            };
+            scripts.push(scriptInfo);
+        });
+
+        return scripts;
+    }
+
+    /**
+     * Get blocks information from a script
+     */
+    getBlocksInfo(block, depth = 0) {
+        if (!block || depth > 10) return []; // Prevent infinite recursion
+
+        const blocks = [];
+        let currentBlock = block;
+
+        while (currentBlock) {
+            const blockInfo = {
+                opcode: currentBlock.selector || 'unknown',
+                category: this.getBlockCategory(currentBlock),
+                inputs: this.getBlockInputs(currentBlock),
+                position: {
+                    x: currentBlock.position().x,
+                    y: currentBlock.position().y
+                }
+            };
+
+            // Handle nested blocks (C-blocks)
+            if (currentBlock.inputs) {
+                const inputs = currentBlock.inputs();
+                inputs.forEach((input, index) => {
+                    if (input instanceof BlockMorph) {
+                        blockInfo.nested_blocks = this.getBlocksInfo(input, depth + 1);
+                    }
+                });
+            }
+
+            blocks.push(blockInfo);
+            currentBlock = currentBlock.nextBlock ? currentBlock.nextBlock() : null;
+        }
+
+        return blocks;
+    }
+
+    /**
+     * Get block category
+     */
+    getBlockCategory(block) {
+        if (block.category) {
+            return block.category;
+        }
+        
+        // Try to determine category from block color or type
+        const color = block.color;
+        if (color) {
+            // Map colors to categories (approximate)
+            const colorMap = {
+                '#4a6cd4': 'motion',
+                '#8a55d7': 'looks',
+                '#bb42c3': 'sound',
+                '#c88330': 'events',
+                '#e1a91a': 'control',
+                '#2ca5e2': 'sensing',
+                '#5cb712': 'operators',
+                '#ee7d16': 'variables'
+            };
+            return colorMap[color.toString()] || 'unknown';
+        }
+        
+        return 'unknown';
+    }
+
+    /**
+     * Get block inputs
+     */
+    getBlockInputs(block) {
+        const inputs = {};
+        
+        if (block.inputs) {
+            const inputSlots = block.inputs();
+            inputSlots.forEach((input, index) => {
+                if (input.contents) {
+                    inputs[`input_${index}`] = input.contents();
+                } else if (input instanceof BlockMorph) {
+                    inputs[`input_${index}`] = `[${input.selector || 'block'}]`;
+                }
+            });
+        }
+
+        return inputs;
+    }
+
+    /**
+     * Get global variables
+     */
+    getGlobalVariables() {
+        const stage = this.getStage();
+        const variables = [];
+
+        if (stage.variables) {
+            stage.variables.names().forEach(name => {
+                variables.push({
+                    name: name,
+                    value: stage.variables.getVar(name)
+                });
+            });
+        }
+
+        return variables;
+    }
+
+    /**
+     * Get sprite variables
+     */
+    getSpriteVariables(sprite) {
+        const variables = [];
+
+        if (sprite.variables) {
+            sprite.variables.names().forEach(name => {
+                variables.push({
+                    name: name,
+                    value: sprite.variables.getVar(name)
+                });
+            });
+        }
+
+        return variables;
+    }
+
+    /**
+     * Get custom blocks
+     */
+    getCustomBlocks() {
+        const ide = this.getIDE();
+        const customBlocks = [];
+
+        // Get global custom blocks
+        if (ide.stage.customBlocks) {
+            ide.stage.customBlocks.forEach(block => {
+                customBlocks.push({
+                    name: block.blockSpec(),
+                    category: block.category,
+                    scope: 'global'
+                });
+            });
+        }
+
+        // Get sprite-specific custom blocks
+        ide.sprites.asArray().forEach(sprite => {
+            if (sprite.customBlocks) {
+                sprite.customBlocks.forEach(block => {
+                    customBlocks.push({
+                        name: block.blockSpec(),
+                        category: block.category,
+                        scope: 'sprite',
+                        sprite: sprite.name
+                    });
+                });
+            }
+        });
+
+        return customBlocks;
+    }
+
+    /**
+     * Execute JavaScript code in Snap! context
+     */
+    async executeScript(payload) {
+        try {
+            const { javascript_code, return_result, sandbox_mode } = payload;
+            
+            let result;
+            const startTime = performance.now();
+
+            if (sandbox_mode) {
+                // Execute in limited context
+                result = this.executeSandboxed(javascript_code);
+            } else {
+                // Execute directly (be careful!)
+                result = eval(javascript_code);
+            }
+
+            const executionTime = performance.now() - startTime;
+
+            return {
+                result: return_result ? result : null,
+                execution_time_ms: executionTime,
+                side_effects: this.detectSideEffects()
+            };
+
+        } catch (error) {
+            console.error('Script execution error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute code in sandboxed environment
+     */
+    executeSandboxed(code) {
+        // Create limited context
+        const sandbox = {
+            ide: this.getIDE(),
+            stage: this.getStage(),
+            sprite: this.getIDE().currentSprite,
+            // Add safe utilities
+            console: {
+                log: console.log.bind(console)
+            }
+        };
+
+        // Execute with limited scope
+        const func = new Function(...Object.keys(sandbox), code);
+        return func(...Object.values(sandbox));
+    }
+
+    /**
+     * Detect side effects from script execution
+     */
+    detectSideEffects() {
+        // Simple side effect detection
+        return {
+            sprite_moved: false, // Would need to track position changes
+            sprite_shown: false, // Would need to track visibility changes
+            variables_changed: false // Would need to track variable changes
+        };
+    }
+
+    /**
+     * Inspect specific state
+     */
+    async inspectState(payload) {
+        try {
+            const { query } = payload;
+            
+            switch (query.type) {
+                case 'blocks_at_position':
+                    return this.getBlocksAtPosition(query);
+                case 'sprite_info':
+                    return this.getSpriteInfo(query.sprite);
+                case 'variable_value':
+                    return this.getVariableValue(query.variable);
+                default:
+                    throw new Error(`Unknown query type: ${query.type}`);
+            }
+
+        } catch (error) {
+            console.error('State inspection error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get blocks at specific position
+     */
+    getBlocksAtPosition(query) {
+        const { sprite, x, y, radius } = query;
+        const targetSprite = this.getIDE().sprites.detect(s => s.name === sprite);
+        
+        if (!targetSprite) {
+            throw new Error(`Sprite '${sprite}' not found`);
+        }
+
+        const blocksFound = [];
+        const searchRadius = radius || 50;
+
+        targetSprite.scripts.children.forEach(script => {
+            const scriptPos = script.position();
+            const distance = Math.sqrt(
+                Math.pow(scriptPos.x - x, 2) + Math.pow(scriptPos.y - y, 2)
+            );
+
+            if (distance <= searchRadius) {
+                blocksFound.push({
+                    block_id: script.blockId || 'unknown',
+                    opcode: script.selector || 'unknown',
+                    position: { x: scriptPos.x, y: scriptPos.y },
+                    connected_blocks: this.countConnectedBlocks(script)
+                });
+            }
+        });
+
+        return {
+            blocks_found: blocksFound,
+            total_count: blocksFound.length
+        };
+    }
+
+    /**
+     * Count connected blocks in a script
+     */
+    countConnectedBlocks(block) {
+        let count = 0;
+        let current = block;
+
+        while (current) {
+            count++;
+            current = current.nextBlock ? current.nextBlock() : null;
+        }
+
+        return count;
+    }
+
+    /**
+     * Export project
+     */
+    async exportProject(payload) {
+        try {
+            const { format, include_media, compress } = payload;
+            const ide = this.getIDE();
+            
+            let projectData;
+            
+            if (format === 'xml') {
+                projectData = ide.serializer.serialize(ide.stage);
+            } else if (format === 'json') {
+                // Convert XML to JSON (simplified)
+                const xmlData = ide.serializer.serialize(ide.stage);
+                projectData = JSON.stringify({ xml: xmlData });
+            } else {
+                throw new Error(`Unsupported format: ${format}`);
+            }
+
+            return {
+                project_data: projectData,
+                size_bytes: projectData.length,
+                format: format
+            };
+
+        } catch (error) {
+            console.error('Project export error:', error);
+            throw error;
+        }
+    }
+}
+
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = SnapAPIWrapper;
+}
+
+
+
+================================================
+FILE: snap_bridge/visual_feedback.js
+================================================
+// snap_bridge/visual_feedback.js - Visual Feedback and Animations
+
+/**
+ * VisualFeedback
+ * 
+ * Provides visual feedback, animations, and educational hints
+ * when blocks are created or manipulated.
+ */
+
+`NOT INCLUDED HERE for brevity`
+
+
+================================================
+FILE: snap_bridge/websocket_client.js
+================================================
+// snap_bridge/websocket_client.js - WebSocket Client for MCP Communication
+
+/**
+ * WebSocketClient
+ * 
+ * Handles WebSocket communication with the MCP server,
+ * including connection management, message queuing, and reconnection logic.
+ */
+
+class WebSocketClient {
+    constructor(url = 'ws://localhost:8765') {
+        this.url = url;
+        this.websocket = null;
+        this.isConnected = false;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 1000; // Start with 1 second
+        this.messageQueue = [];
+        this.messageHandlers = new Map();
+        this.pendingMessages = new Map();
+        this.messageId = 0;
+        this.heartbeatInterval = null;
+        this.heartbeatTimeout = 30000; // 30 seconds
+        
+        this.setupEventHandlers();
+    }
+
+    /**
+     * Setup event handlers
+     */
+    setupEventHandlers() {
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.pauseHeartbeat();
+            } else {
+                this.resumeHeartbeat();
+            }
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            this.disconnect();
+        });
+    }
+
+    /**
+     * Connect to WebSocket server
+     */
+    async connect(token) {
+        try {
+            console.log(`🔌 Connecting to ${this.url}...`);
+            
+            this.websocket = new WebSocket(this.url);
+            
+            this.websocket.onopen = () => {
+                console.log('✅ WebSocket connected');
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+                this.reconnectDelay = 1000;
+                
+                // Send connection request
+                this.sendConnectionRequest(token);
+                
+                // Start heartbeat
+                this.startHeartbeat();
+                
+                // Process queued messages
+                this.processMessageQueue();
+                
+                // Notify handlers
+                this.emit('connected');
+            };
+            
+            this.websocket.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    this.handleMessage(message);
+                } catch (error) {
+                    console.error('❌ Error parsing message:', error);
+                }
+            };
+            
+            this.websocket.onclose = (event) => {
+                console.log('🔌 WebSocket disconnected:', event.code, event.reason);
+                this.isConnected = false;
+                this.stopHeartbeat();
+                
+                // Attempt reconnection if not intentional
+                if (event.code !== 1000) {
+                    this.attemptReconnection();
+                }
+                
+                this.emit('disconnected', { code: event.code, reason: event.reason });
+            };
+            
+            this.websocket.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+                this.emit('error', error);
+            };
+            
+        } catch (error) {
+            console.error('❌ Connection error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Disconnect from WebSocket server
+     */
+    disconnect() {
+        if (this.websocket) {
+            this.websocket.close(1000, 'Client disconnect');
+        }
+        this.stopHeartbeat();
+    }
+
+    /**
+     * Send connection request
+     */
+    sendConnectionRequest(token) {
+        const message = {
+            type: 'connect',
+            version: '1.0.0',
+            token: token,
+            client_info: {
+                extension_version: '0.1.0',
+                browser: navigator.userAgent,
+                snap_version: this.getSnapVersion(),
+                timestamp: new Date().toISOString()
+            }
+        };
+        
+        this.send(message);
+    }
+
+    /**
+     * Get Snap! version
+     */
+    getSnapVersion() {
+        try {
+            return world.children[0].version || 'unknown';
+        } catch (error) {
+            return 'unknown';
+        }
+    }
+
+    /**
+     * Send message
+     */
+    send(message) {
+        if (this.isConnected && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify(message));
+        } else {
+            // Queue message for later
+            this.messageQueue.push(message);
+        }
+    }
+
+    /**
+     * Send message with response tracking
+     */
+    async sendWithResponse(message, timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            const messageId = this.generateMessageId();
+            message.message_id = messageId;
+            
+            // Set up response handler
+            const timeoutId = setTimeout(() => {
+                this.pendingMessages.delete(messageId);
+                reject(new Error('Message timeout'));
+            }, timeout);
+            
+            this.pendingMessages.set(messageId, {
+                resolve,
+                reject,
+                timeoutId
+            });
+            
+            this.send(message);
+        });
+    }
+
+    /**
+     * Generate unique message ID
+     */
+    generateMessageId() {
+        return `msg_${++this.messageId}_${Date.now()}`;
+    }
+
+    /**
+     * Handle incoming message
+     */
+    handleMessage(message) {
+        console.log('📨 Received message:', message.type);
+        
+        // Handle response to pending message
+        if (message.message_id && this.pendingMessages.has(message.message_id)) {
+            const pending = this.pendingMessages.get(message.message_id);
+            clearTimeout(pending.timeoutId);
+            this.pendingMessages.delete(message.message_id);
+            
+            if (message.status === 'success') {
+                pending.resolve(message.payload);
+            } else {
+                pending.reject(new Error(message.error?.message || 'Request failed'));
+            }
+            return;
+        }
+        
+        // Handle specific message types
+        switch (message.type) {
+            case 'connect_ack':
+                this.handleConnectionAck(message);
+                break;
+            case 'connect_error':
+                this.handleConnectionError(message);
+                break;
+            case 'ping':
+                this.handlePing(message);
+                break;
+            case 'command':
+                this.handleCommand(message);
+                break;
+            default:
+                console.warn('⚠️ Unknown message type:', message.type);
+        }
+        
+        // Emit to registered handlers
+        this.emit(message.type, message);
+    }
+
+    /**
+     * Handle connection acknowledgment
+     */
+    handleConnectionAck(message) {
+        if (message.status === 'accepted') {
+            console.log('✅ Connection accepted');
+            this.emit('authenticated', message);
+        }
+    }
+
+    /**
+     * Handle connection error
+     */
+    handleConnectionError(message) {
+        console.error('❌ Connection rejected:', message.error);
+        this.emit('authentication_failed', message.error);
+    }
+
+    /**
+     * Handle ping message
+     */
+    handlePing(message) {
+        const pong = {
+            type: 'pong',
+            timestamp: new Date().toISOString(),
+            latency_ms: Date.now() - new Date(message.timestamp).getTime()
+        };
+        this.send(pong);
+    }
+
+    /**
+     * Handle command message
+     */
+    handleCommand(message) {
+        this.emit('command', message);
+    }
+
+    /**
+     * Process queued messages
+     */
+    processMessageQueue() {
+        while (this.messageQueue.length > 0) {
+            const message = this.messageQueue.shift();
+            this.send(message);
+        }
+    }
+
+    /**
+     * Attempt reconnection
+     */
+    attemptReconnection() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('❌ Max reconnection attempts reached');
+            this.emit('reconnection_failed');
+            return;
+        }
+        
+        this.reconnectAttempts++;
+        console.log(`🔄 Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+        
+        setTimeout(() => {
+            this.connect().catch(error => {
+                console.error('❌ Reconnection failed:', error);
+                // Exponential backoff
+                this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+                this.attemptReconnection();
+            });
+        }, this.reconnectDelay);
+    }
+
+    /**
+     * Start heartbeat
+     */
+    startHeartbeat() {
+        this.heartbeatInterval = setInterval(() => {
+            if (this.isConnected) {
+                this.send({
+                    type: 'ping',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }, this.heartbeatTimeout);
+    }
+
+    /**
+     * Stop heartbeat
+     */
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
+
+    /**
+     * Pause heartbeat (when page is hidden)
+     */
+    pauseHeartbeat() {
+        this.stopHeartbeat();
+    }
+
+    /**
+     * Resume heartbeat (when page is visible)
+     */
+    resumeHeartbeat() {
+        if (this.isConnected) {
+            this.startHeartbeat();
+        }
+    }
+
+    /**
+     * Register event handler
+     */
+    on(event, handler) {
+        if (!this.messageHandlers.has(event)) {
+            this.messageHandlers.set(event, []);
+        }
+        this.messageHandlers.get(event).push(handler);
+    }
+
+    /**
+     * Unregister event handler
+     */
+    off(event, handler) {
+        if (this.messageHandlers.has(event)) {
+            const handlers = this.messageHandlers.get(event);
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+                handlers.splice(index, 1);
+            }
+        }
+    }
+
+    /**
+     * Emit event to handlers
+     */
+    emit(event, data) {
+        if (this.messageHandlers.has(event)) {
+            this.messageHandlers.get(event).forEach(handler => {
+                try {
+                    handler(data);
+                } catch (error) {
+                    console.error(`❌ Error in event handler for ${event}:`, error);
+                }
+            });
+        }
+    }
+
+    /**
+     * Get connection status
+     */
+    getStatus() {
+        return {
+            connected: this.isConnected,
+            reconnect_attempts: this.reconnectAttempts,
+            queued_messages: this.messageQueue.length,
+            pending_messages: this.pendingMessages.size
+        };
+    }
+}
+
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = WebSocketClient;
+}
+
+
+
+================================================
+FILE: wip-docs/before-prd3_limitsOfOnlyRules.md
+================================================
+# Current Status and Next Steps
+
+We have successfully built a robust technical pipeline. The connection is stable, commands are queued correctly, and the extension has proper access to the Snap! environment.
+
+**The current issue is purely in the application logic:**
+
+1.  **Server-Side:** When the user says "move 10 steps right", the Python `block_generator.py` fails to match this to a known block in its JSON knowledge base. As a **fallback**, it generates a command to create a `doSay` block (a dialog box) instead.
+2.  **Client-Side:** The JavaScript `block_creator.js` receives the `doSay` opcode, but it doesn't currently have the logic to build that specific type of block, resulting in a silent failure where no blocks are created.
+
+Our next chat will focus on refining this application logic. We will need to examine the **`block_generator.py`** and its knowledge files to correctly parse user intent, and enhance **`block_creator.js`** to reliably build any block the server instructs it to create.
+
+# Files Needed for the Final Fix
+
+1. The Block Generator Logic
+This file will show me the fallback logic and how it processes intents.
+
+    mcp_server/tools/block_generator.py
+
+2. The Block "Knowledge Base"
+These two JSON files are the "brain" for the generator. They will tell me why "move 10 steps right" isn't being found.
+
+    mcp_server/knowledge/snap_blocks.json
+
+    mcp_server/knowledge/patterns.json
+
+3. The Block Creation Logic
+This file will show me why the doSay opcode is failing to be created in the browser. I need to see the createSingleBlock function (or whatever it's called in your file).
+
+    browser_extension/snap_bridge/block_creator.js
+
+---
+
+Here is an overview of the system's logic, its knowledge base, and a step-by-step guide to achieving the proof-of-concept of making a sprite "move 10 steps right."
+
+# Overall Picture of the Current Logic Implementation
+
+The system is comprised of three primary components that work in concert:
+
+1.  **The Python Backend (`mcp_server`)**:
+    *   `snap_communicator.py`: This acts as the central nervous system. It establishes a WebSocket server that listens for connections from the browser extension. Its key responsibilities are managing connections, validating sessions, and providing a high-level API (`create_blocks`, `read_project`, etc.) for other parts of the server to communicate with Snap!. It ensures that data is correctly formatted into a standard JSON protocol before being sent over the WebSocket. A critical detail is in the `create_blocks` function, which now correctly unwraps the payload, preventing the double-nesting issue from the past.
+    *   `block_generator.py`: This is the "brain" of the operation. It takes a structured `ParsedIntent` and uses two JSON files (`snap_blocks.json` and `patterns.json`) as its knowledge base to determine which Snap! blocks to create. It first tries to match the user's command to a high-level "pattern" (a pre-defined sequence of blocks). If no pattern is found, it attempts to match the command to a single, known block. If both of those fail, it executes its **fallback logic**: creating a `doSay` block that verbalizes the user's unfulfilled command.
+
+2.  **The Knowledge Base (`knowledge/`)**:
+    *   `snap_blocks.json`: This file is a dictionary of individual Snap! blocks. It defines their `opcode` (the internal Snap! name), their category (motion, looks, etc.), the parameters they accept, and default values. This allows the `block_generator` to construct a single block from scratch.
+    *   `patterns.json`: This file defines common, high-level actions that may involve multiple blocks. For example, a "jump" pattern is defined as a `changeYBy` block, a `doWait` block, and another `changeYBy` block. Each pattern has a list of `triggers` (natural language phrases) that map to it. This is the first place the `block_generator` looks to match a user's intent.
+
+3.  **The Frontend JavaScript (`snap_bridge/`)**:
+    *   `block_creator.js`: This script is injected directly into the Snap! IDE's webpage. It receives JSON commands from the `snap_communicator`. Its primary function, `createBlocks`, iterates through a list of block specifications sent by the server. For each specification, it uses the internal Snap! API to create the corresponding block, set its inputs, and connect it to the previous block in the sequence. It was previously failing silently because it did not have logic to handle the `doSay` opcode, but this logic can be added. The fix to correctly find a sprite by name (`ide.sprites.asArray().find()`) was a crucial step in stabilizing this component.
+
+### High-Order Categorical Groups of the Knowledge Base
+
+The knowledge base can be conceptually organized into these categories:
+
+*   **Core Motion**: Fundamental, single-axis movements (`forward`, `changeXBy`, `changeYBy`, `turnRight`, `turnLeft`). These are the most basic building blocks of animation.
+*   **Positional Motion**: Actions that place the sprite in a specific state or location (`gotoXY`, `bounceOffEdge`).
+*   **Appearance & Communication**: Blocks that alter the sprite's visuals or make it "speak" (`doSay`, `hide`, `show`, `changeSize`, `changeEffect`).
+*   **Sound & Events**: Blocks related to audio output and, critically, the "hat blocks" that start every script (`doPlaySound`, `receiveGo`, `receiveKey`).
+*   **Control Flow**: The logic that governs execution, such as loops and delays (`doWait`, `doRepeat`, `doForever`).
+*   **Sensing & Operators**: Advanced blocks that allow for interactivity by checking for conditions (`reportTouchingObject`, `reportKeyPressed`) or performing calculations (`reportSum`, `reportRandom`).
+*   **Multi-Block Patterns**: These are composite actions built from the primitives above. They represent more complex ideas that a user might express, such as:
+    *   **Animated Actions**: `jump`, `spin`, `dance`, `grow_shrink`.
+    *   **Interactive Behaviors**: `follow_mouse`, `bouncing_ball`.
+    *   **Visual Effects**: `change_colors`.
+
+### How to Create a Simple Proof of Concept: "Move Sprite 10 Steps Right"
+
+The reason this command currently fails is due to a mismatch between the user's phrasing and the triggers defined in the knowledge base. The system correctly identifies the intent to "move right" but doesn't find a matching pattern or block. Here is how to fix it and achieve the desired outcome:
+
+**Step 1: Understand the Failure Point**
+
+1.  **User Input**: "move 10 steps right"
+2.  **Intent Parsing**: The (assumed) parser correctly identifies the action as "move right" and a parameter of "10 steps."
+3.  **`block_generator.py` Lookup**:
+    *   It checks `patterns.json`. The `move_right` pattern has triggers like "move right," "go right," and "right." This *should* match. The issue might be that the parser is sending the action as "move 10 steps right," which doesn't exactly match the trigger.
+    *   If the pattern lookup fails, it checks `snap_blocks.json`. It looks for a block definition containing "move 10 steps right." None exists.
+    *   **Fallback**: Since both lookups fail, it generates the `doSay` block with the message "I want to move 10 steps right."
+4.  **`block_creator.js` Execution**: The JavaScript receives the `doSay` opcode. If the logic to create this specific block isn't present in the `createSingleBlock` function, nothing appears on the screen.
+
+**Step 2: Implement the Solution**
+
+The most robust way to solve this is to ensure the `move_right` pattern is correctly identified and used.
+
+**Action 1: Broaden the Pattern Trigger in `patterns.json`**
+
+The simplest fix is to make the trigger more flexible. While the current triggers are good, adding a more general one can help.
+
+In `mcp_server/knowledge/patterns.json`, update the `move_right` pattern to include "steps right":
+
+```json
+{
+  "patterns": {
+    "move_right": {
+      "blocks": [
+        {
+          "opcode": "changeXBy",
+          "inputs": {"DX": 10},
+          "category": "motion"
+        }
+      ],
+      "explanation": "Moves sprite to the right!",
+      "difficulty": "beginner",
+      "triggers": ["move right", "go right", "right", "move forward", "steps right"],
+      "estimated_time_ms": 100,
+      "teaching_points": [
+        "X coordinates control left-right movement",
+        "Positive X moves right"
+      ]
+    },
+    ...
+  }
+}
+```
+
+**Action 2: Ensure the `block_generator` Can Handle Parameters**
+
+The `block_generator.py` needs to be intelligent enough to extract the number "10" from the intent and apply it to the block. The current `_create_blocks_from_pattern` does not seem to use the `intent.parameters`. Let's assume for this POC that the intent parser correctly identifies `{'steps': 10}`. The generator needs to be modified to use this parameter.
+
+In `mcp_server/tools/block_generator.py`, update `_create_blocks_from_pattern` to be parameter-aware:
+
+```python
+    def _create_blocks_from_pattern(self, pattern: Dict[str, Any], intent: ParsedIntent) -> List[SnapBlock]:
+        """Create blocks from a pattern definition, applying intent parameters."""
+        blocks = []
+
+        for i, block_spec in enumerate(pattern.get("blocks", [])):
+            # --- START MODIFICATION ---
+            
+            # Copy original inputs to avoid modifying the pattern in memory
+            final_inputs = block_spec.get("inputs", {}).copy()
+
+            # Override default pattern inputs with parameters from the user's intent
+            if block_spec["opcode"] == "changeXBy" and "steps" in intent.parameters:
+                final_inputs["DX"] = intent.parameters["steps"]
+            elif block_spec["opcode"] == "forward" and "steps" in intent.parameters:
+                final_inputs["STEPS"] = intent.parameters["steps"]
+            # Add more parameter-aware logic here for other patterns...
+            
+            # --- END MODIFICATION ---
+
+            block = SnapBlock(
+                opcode=block_spec["opcode"],
+                category=BlockCategory(block_spec.get("category", "motion")),
+                inputs=final_inputs, # Use the modified inputs
+                description=f"Pattern block {i+1}"
+            )
+            blocks.append(block)
+
+        return blocks
+```
+
+**Action 3: Verify `block_creator.js` Can Create the `changeXBy` Block (It already can)**
+
+The final step is to ensure the frontend can physically create the block. Examining `block_creator.js`, the `createSingleBlock` function is generic. It uses `sprite.blockForSelector(opcode)`, which works for most standard blocks, including `changeXBy`. The `setBlockInputs` function correctly sets the value in the block. Therefore, no changes are needed on the frontend for this specific command.
+
+By making these changes, the system will now successfully execute the "move 10 steps right" command, laying a solid foundation for tackling more interesting and complex problems.
+
+
+================================================
+FILE: wip-docs/prd3.md
+================================================
+This document isn't meant to replace your existing ones but to be inserted as the next logical evolution of the system's core intelligence. It formalizes the "Master Chef" concept and provides a clear roadmap for evolving the `block_generator.py` from a simple rule-based engine into a powerful, hybrid orchestration system.
+
+---
+
+# PRD Addendum: Next-Generation Block Generation
+
+**Document Version:** 1.0
+**Date:** October 1, 2025
+**Author:** Gemini
+**Status:** Proposed
+
+## 1. Executive Summary
+
+This document proposes a significant architectural evolution for the **MCP Server's block generation logic**. The current system, while functional for debugging the core pipeline, relies on a rigid, rule-based lookup against static JSON files (`patterns.json`, `snap_blocks.json`). This approach is fundamentally unscalable, inflexible, and incapable of true "understanding."
+
+To overcome these limitations, we will upgrade the `block_generator.py` to function as a **sophisticated orchestrator**—a "Master Chef." This new architecture will employ a **hybrid strategy**, combining the speed and reliability of the existing rule-based system for common requests with the power and flexibility of a generative model (Gemini API) for novel, complex commands.
+
+This evolution transforms the MCP Server from a simple translator into a true **abstraction layer**, capable of intelligently and securely converting any high-level user intent into robust, executable Snap! JSON.
+
+## 2. Problem Statement: The Limits of a Rule-Based System
+
+The current implementation has successfully proven the viability of the end-to-end connection. However, its core logic for translating intent to blocks faces three critical limitations:
+
+1.  **Scalability Failure:** It is impossible to manually pre-define every command a user might conceive. The system will perpetually fail on synonyms, rephrasing, and compound commands not explicitly listed in the JSON knowledge base.
+2.  **Lack of Compositionality:** The system cannot reason about combining known concepts in new ways. A user asking to "jump and change color" will fail unless a specific "jump_and_change_color" pattern is manually created.
+3.  **High Maintenance Overhead:** Every new block or pattern in Snap! requires manual updates to the JSON files, making the system brittle and slow to adapt.
+
+The current fallback—creating a `doSay` block—is a temporary solution that highlights the system's inability to handle requests outside its narrow, pre-defined knowledge.
+
+## 3. Proposed Architecture: The Hybrid Orchestration Engine
+
+We will redesign the `block_generator.py` to act as an intelligent orchestrator. Instead of a linear lookup, it will follow a strategic, two-pronged approach.
+
+### 3.1. High-Level Logic Flow
+
+The new workflow inside the `Block Generator` component will be as follows:
+
+```
+┌──────────────────────────────────────────┐
+│ RovoDev sends high-level intent:         │
+│ "make the sprite dance when I press 'd'" │
+└────────────────────┬─────────────────────┘
+                     │
+                     ↓
+┌──────────────────────────────────────────┐
+│      MCP Server: Block Generator         │
+│     (The "Master Chef" Orchestrator)     │
+└────────────────────┬─────────────────────┘
+                     │
+                     ↓
+        ┌──────────────────────────┐
+        │ Does intent match a      │
+        │ known, simple pattern in │
+        │    `patterns.json`?      │
+        └────────────┬─────────────┘
+        (e.g., "jump", "move right")
+                     │
+       ┌─────────────┴─────────────┐
+       │                           │
+       ↓ YES                       ↓ NO
+┌──────────────┐         ┌───────────────────────────┐
+│              │         │ This is a complex/novel   │
+│ Rule-Based   │         │ request. Escalate to the  │
+│ Engine       │         │ "Creative Consultant."    │
+│ (Fast & Cheap) │         └─────────────┬───────────┘
+└──────────────┘                           │
+       │                                 ↓
+┌──────────────┐         ┌───────────────────────────┐
+│ Instantly    │         │ Generative Engine         │
+│ builds JSON  │         │ (Powerful & Flexible)     │
+│ from the     │         ├───────────────────────────┤
+│ pre-defined  │         │ 1. Construct a specialized│
+│ recipe.      │         │    prompt for Gemini API. │
+└──────────────┘         │ 2. Send the user's intent │
+       │                 │    and generation rules.  │
+       │                 │ 3. Receive generated JSON.│
+       │                 └───────────────────────────┘
+       │                                 │
+       └─────────────┬───────────────────┘
+                     │
+                     ↓
+┌──────────────────────────────────────────┐
+│      Validation & Sanitization Layer     │
+│   (The "Executive Chef's Inspection")    │
+├──────────────────────────────────────────┤
+│ 1. Verify JSON is well-formed.           │
+│ 2. Ensure all opcodes are on an allowed  │
+│    list.                                 │
+│ 3. Check for structural integrity.       │
+│ 4. Reject if unsafe or invalid.          │
+└────────────────────┬─────────────────────┘
+                     │
+                     ↓
+┌──────────────────────────────────────────┐
+│ Send final, robust JSON to               │
+│ `snap_communicator.py` for delivery      │
+└──────────────────────────────────────────┘
+```
+
+### 3.2. Component Modification: `block_generator.py`
+
+The core responsibility of this file will shift from *lookup* to *orchestration*.
+
+**Current Logic (Simplified):**
+
+```python
+def generate_blocks(intents):
+    pattern = find_matching_pattern(intent.action)
+    if pattern:
+        return create_from_pattern(pattern)
+    
+    block_def = find_block_definition(intent.action)
+    if block_def:
+        return create_from_definition(block_def)
+        
+    # Fallback
+    return create_fallback_say_block(intent.action)
+```
+
+**Proposed Logic (Simplified):**
+
+```python
+def generate_blocks(intents):
+    # --- Phase 1: Fast Path (Rule-Based) ---
+    pattern = find_matching_pattern(intent.action)
+    if pattern:
+        generated_json = create_from_pattern(pattern)
+    else:
+        # --- Phase 2: Powerful Path (Generative) ---
+        generated_json = call_generative_engine(intent)
+
+    # --- Phase 3: Universal Validation ---
+    if not validate_snap_json(generated_json):
+        raise ValueError("Generated JSON is invalid or unsafe.")
+        
+    return generated_json
+```
+
+## 4. The Generative Engine: Prompting Gemini for Snap!
+
+The key to the generative engine is a carefully engineered prompt that instructs the LLM on its role, constraints, and required output format. This prompt will be the core of the `call_generative_engine` function.
+
+### 4.1. Sample Prompt Template
+
+```
+You are an expert Snap! visual programming assistant. Your sole task is to convert a user's request into a single, valid JSON object that conforms to the specified format for creating Snap! blocks.
+
+**RULES:**
+1.  You MUST respond with only a single, raw JSON object. Do not include markdown, explanations, or any other conversational text in your output.
+2.  Analyze the user's request to determine the correct sequence of blocks, their inputs, and any necessary event triggers (hat blocks).
+3.  Use only the opcodes provided in the "Available Opcodes" list. Do not invent new ones.
+4.  The first block in a script should have its `is_hat_block` property set to `true`.
+5.  Connect blocks sequentially using the `next` property, referencing the `block_id` of the subsequent block. The last block's `next` should be `null`.
+
+**Available Opcodes:**
+{
+  "motion": ["forward", "turnRight", "changeXBy", "changeYBy", "gotoXY"],
+  "looks": ["doSay", "doSayFor", "hide", "show", "changeSize"],
+  "events": ["receiveGo", "receiveKey", "receiveClick"],
+  "control": ["doWait", "doRepeat", "doForever"],
+  "sound": ["doPlaySoundUntilDone"]
+}
+
+**JSON OUTPUT STRUCTURE:**
+{
+  "command": "create_blocks",
+  "payload": {
+    "target_sprite": "Sprite",
+    "scripts": [{
+      "script_id": "script_001",
+      "position": {"x": 50, "y": 50},
+      "blocks": [
+        {
+          "block_id": "block_001",
+          "opcode": "...",
+          "category": "...",
+          "inputs": { ... },
+          "is_hat_block": true,
+          "next": "block_002"
+        },
+        {
+          "block_id": "block_002",
+          "opcode": "...",
+          "category": "...",
+          "inputs": { ... },
+          "is_hat_block": false,
+          "next": null
+        }
+      ]
+    }]
+  }
+}
+
+---
+**USER REQUEST:**
+"{user_input_here}"
+---
+
+**YOUR JSON RESPONSE:**
+```
+
+## 5. The Validation Layer
+
+This is the most critical step for security and stability. Before sending *any* JSON to the browser (whether rule-based or generative), the MCP Server **must** validate it.
+
+**Validation Checks:**
+1.  **Structural Integrity:** Use a Pydantic model or similar schema to ensure the JSON has the correct structure (`command`, `payload`, `scripts`, `blocks`, etc.).
+2.  **Opcode Allowlist:** Verify that every `opcode` in the generated blocks exists in a master list of known, safe opcodes (`snap_blocks.json` can serve as this list).
+3.  **Input Sanitization:** Check input values for potentially malicious content (though this is less of a risk in Snap!'s sandboxed environment, it is good practice).
+4.  **Connectivity Check:** Ensure the `next` block references are valid and do not create infinite loops.
+
+If any check fails, the server should reject the generation and return a user-friendly error, rather than sending malformed data to the browser.
+
+## 6. Implementation Impact
+
+This change primarily affects `mcp_server/tools/block_generator.py` and its dependencies.
+
+**Next Steps:**
+1.  **Stabilize Connection:** Fully resolve all outstanding connection issues as documented in the "Current Implementation Status." A stable pipeline is a prerequisite.
+2.  **Implement the Orchestrator Logic:** Refactor `block_generator.py` to include the `if/else` logic for choosing between the rule-based and generative paths.
+3.  **Integrate Gemini API:** Create the `call_generative_engine` function, which will format the prompt, make the API call, and parse the JSON response. API keys should be managed via environment variables.
+4.  **Build the Validator:** Implement a robust `validate_snap_json` function or class that performs the checks listed in Section 5.
+5.  **Expand `block_creator.js`:** Ensure the frontend `block_creator.js` can robustly handle every opcode listed in the "Available Opcodes" allowlist to prevent silent failures.
+
+This architectural upgrade will move the project from a functional proof-of-concept to a truly intelligent, scalable, and safe educational tool.
+

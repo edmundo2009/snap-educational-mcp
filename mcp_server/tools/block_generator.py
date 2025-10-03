@@ -1,370 +1,455 @@
-# mcp_server/tools/block_generator.py - Snap! Block Generation Engine
+# mcp_server/tools/block_generator.py
 
-import json
 import os
+import json
+import logging
+import hashlib
+from datetime import datetime
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
-from enum import Enum
+import google.generativeai as genai
+from difflib import SequenceMatcher
 
-# Import the updated ParsedIntent from the parser
 from ..parsers.intent_parser import ParsedIntent
+from ..parsers.validators import validate_snap_json
 
-
-class BlockCategory(Enum):
-    MOTION = "motion"
-    LOOKS = "looks"
-    SOUND = "sound"
-    EVENTS = "events"
-    CONTROL = "control"
-    SENSING = "sensing"
-    OPERATORS = "operators"
-    VARIABLES = "variables"
-    CUSTOM = "custom"
+# Configure Gemini client
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 
 @dataclass
 class SnapBlock:
-    """Represents a single Snap! block"""
+    """Individual Snap! block representation"""
+    block_id: str
     opcode: str
-    category: BlockCategory
+    category: str
     inputs: Dict[str, Any]
-    description: str
-    position: Optional[Dict[str, int]] = None
-    next_block: Optional[str] = None
     is_hat_block: bool = False
+    next: Optional[str] = None
 
 
 @dataclass
 class BlockSequence:
-    """Represents a sequence of blocks that form a complete script"""
-    blocks: List[SnapBlock]
-    explanation: str
-    difficulty: str
-    estimated_time: int = 0  # milliseconds
+    """Sequence of blocks with metadata"""
+    blocks: List[SnapBlock] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class SnapBlockGenerator:
     """
-    Core engine for converting natural language intents into Snap! block sequences.
-    
-    Uses knowledge base of block definitions and common patterns to generate
-    educationally appropriate block sequences.
+    Hybrid orchestration engine for generating Snap! blocks.
+    Combines fast rule-based matching with powerful generative AI.
     """
 
-    def __init__(self, knowledge_path: str = "knowledge/snap_blocks.json", 
-                 patterns_path: str = "knowledge/patterns.json"):
+    def __init__(self, knowledge_path: str, patterns_path: str):
         self.knowledge_path = knowledge_path
         self.patterns_path = patterns_path
-        self.blocks_db = {}
-        self.patterns_db = {}
-        self.load_knowledge_base()
+        self.blocks_db = self._load_json(knowledge_path)
+        self.patterns_db = self._load_json(patterns_path)
+        self.allowed_opcodes = self._get_all_opcodes()
+        self.trigger_aliases = self._build_trigger_map()
 
-    def load_knowledge_base(self):
-        """Load block definitions and patterns from JSON files"""
+        # Model selection
+        self.fast_model = genai.GenerativeModel('gemini-1.5-flash')
+        self.smart_model = genai.GenerativeModel('gemini-1.5-pro')
+
+        # LRU cache
+        self._generative_cache = OrderedDict()
+        self._cache_max_size = 100
+
+        # Cost control
+        self._api_call_count = 0
+        self._api_cost_estimate = 0.0
+        self._daily_api_limit = 1000
+
+        # Logging & metrics
+        self._setup_logging()
+        self._metrics = {
+            "rule_based_hits": 0,
+            "generative_hits": 0,
+            "cache_hits": 0,
+            "failures": 0
+        }
+
+    # --- Initialization ---
+
+    def _load_json(self, path: str) -> dict:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    def _get_all_opcodes(self) -> set:
+        """Extract all valid opcodes from blocks database"""
+        opcodes = set()
+        for category in self.blocks_db.get('blocks', {}).values():
+            opcodes.update(category.keys())
+        return opcodes
+
+    def _build_trigger_map(self) -> dict:
+        """Build lookup map of all triggers to their patterns"""
+        trigger_map = {}
+        for pattern_name, data in self.patterns_db.get("patterns", {}).items():
+            for trigger in data.get("triggers", []):
+                trigger_map[trigger.lower()] = pattern_name
+        return trigger_map
+
+    def _setup_logging(self):
+        self.logger = logging.getLogger("SnapBlockGenerator")
+        if not self.logger.handlers:
+            self.logger.setLevel(logging.INFO)
+            fh = logging.FileHandler("block_generation.log")
+            fh.setFormatter(logging.Formatter(
+                '%(asctime)s - %(levelname)s - %(message)s'
+            ))
+            self.logger.addHandler(fh)
+
+    # --- Main Orchestration ---
+
+    def generate_snap_json(self, intent: ParsedIntent, user_description: str) -> dict:
+        """
+        Main orchestrator: cache -> rule-based -> generative -> validate
+        """
+        start_time = datetime.now()
+    # This is now handled inside the generative call, but if you add a top-level validation, do this:
+
+        # Let's assume validation is called once at the end for all paths.
+        # (The current implementation validates generative path inside the retry loop, which is better)
+        # If you were to add a final check for rule-based results, it would be:
+
+        # is_valid, error = validate_snap_json(generated_json, self.allowed_opcodes, self.blocks_db)
+        # if not is_valid:
+        #    raise ValueError(f"Rule-based generation failed validation: {error}")
+        
+        # *Note: The latest `block_generator.py` implementation correctly validates only 
+        # the generative path, which is the untrusted one. 
+        # The rule-based path is trusted by definition. 
+        # This is an efficient design. The key is ensuring the call 
+        # inside `_call_generative_engine` is patched.*
+        
         try:
-            # Load block definitions
-            if os.path.exists(self.knowledge_path):
-                with open(self.knowledge_path, 'r') as f:
-                    self.blocks_db = json.load(f)
-                print(f"✓ Loaded {len(self.blocks_db.get('blocks', {}))} block definitions")
-            else:
-                print(f"⚠ Knowledge file not found: {self.knowledge_path}")
-                self.blocks_db = self._create_default_blocks()
+            # Check cache
+            cached_result = self._check_cache(user_description)
+            if cached_result:
+                self._metrics["cache_hits"] += 1
+                self.logger.info(f"Cache hit: {user_description[:50]}")
+                return cached_result
 
-            # Load patterns
-            if os.path.exists(self.patterns_path):
-                with open(self.patterns_path, 'r') as f:
-                    self.patterns_db = json.load(f)
-                print(f"✓ Loaded {len(self.patterns_db.get('patterns', {}))} patterns")
+            # Try rule-based path
+            pattern = self._find_matching_pattern(intent.action)
+            if pattern:
+                self.logger.info(f"Rule-based: {user_description[:50]}")
+                self._metrics["rule_based_hits"] += 1
+                block_sequence = self._create_from_pattern(pattern, intent)
+                generated_json = self.format_for_snap(block_sequence, "Sprite")
             else:
-                print(f"⚠ Patterns file not found: {self.patterns_path}")
-                self.patterns_db = self._create_default_patterns()
+                # Generative path
+                self.logger.info(f"Generative: {user_description[:50]}")
+                self._metrics["generative_hits"] += 1
+                generated_json = self._call_generative_engine(user_description)
+
+            # Cache only valid, non-error results
+            if not generated_json.get("payload", {}).get("error"):
+                self._store_cache(user_description, generated_json)
+
+            duration = (datetime.now() - start_time).total_seconds()
+            self.logger.info(
+                f"Success in {duration:.2f}s: {user_description[:50]}")
+            return generated_json
 
         except Exception as e:
-            print(f"✗ Error loading knowledge base: {e}")
-            self.blocks_db = self._create_default_blocks()
-            self.patterns_db = self._create_default_patterns()
+            self._metrics["failures"] += 1
+            self.logger.error(f"Failed: {user_description[:50]} - {str(e)}")
+            return self._create_error_fallback(str(e), user_description)
 
-    def _create_default_blocks(self) -> Dict[str, Any]:
-        """Create minimal default block definitions"""
-        return {
-            "blocks": {
-                "motion": {
-                    "forward": {
-                        "opcode": "forward",
-                        "category": "motion",
-                        "parameters": ["steps"],
-                        "default_values": {"steps": 10},
-                        "kid_explanation": "Makes sprite move forward!"
-                    },
-                    "changeYBy": {
-                        "opcode": "changeYBy",
-                        "category": "motion", 
-                        "parameters": ["dy"],
-                        "default_values": {"dy": 10},
-                        "kid_explanation": "Moves sprite up or down!"
-                    }
-                },
-                "events": {
-                    "receiveKey": {
-                        "opcode": "receiveKey",
-                        "category": "events",
-                        "parameters": ["key"],
-                        "default_values": {"key": "space"},
-                        "kid_explanation": "Starts when key is pressed!",
-                        "is_hat_block": True
-                    }
-                },
-                "control": {
-                    "doWait": {
-                        "opcode": "doWait",
-                        "category": "control",
-                        "parameters": ["duration"],
-                        "default_values": {"duration": 1},
-                        "kid_explanation": "Waits for some time!"
-                    }
-                }
-            }
-        }
+    # --- Rule-Based Engine ---
 
-    def _create_default_patterns(self) -> Dict[str, Any]:
-        """Create minimal default patterns"""
-        return {
-            "patterns": {
-                "jump": {
-                    "blocks": [
-                        {"opcode": "changeYBy", "inputs": {"DY": 50}},
-                        {"opcode": "doWait", "inputs": {"DURATION": 0.3}},
-                        {"opcode": "changeYBy", "inputs": {"DY": -50}}
-                    ],
-                    "explanation": "Makes sprite jump up and come back down!",
-                    "difficulty": "beginner",
-                    "triggers": ["jump", "hop", "bounce up"]
-                },
-                "move_right": {
-                    "blocks": [
-                        {"opcode": "changeXBy", "inputs": {"DX": 10}}
-                    ],
-                    "explanation": "Moves sprite to the right!",
-                    "difficulty": "beginner",
-                    "triggers": ["move right", "go right", "right"]
-                }
-            }
-        }
+    def _find_matching_pattern(self, action: str) -> Optional[dict]:
+        """Direct lookup with fuzzy fallback"""
+        action_lower = action.lower().strip()
 
-    def generate_blocks(self, intents: List[ParsedIntent], complexity: str = "beginner") -> BlockSequence:
-        """
-        Generate a sequence of Snap! blocks from parsed intents.
+        # Direct trigger map lookup
+        if action_lower in self.trigger_aliases:
+            pattern_name = self.trigger_aliases[action_lower]
+            self.logger.info(f"Exact match: {pattern_name}")
+            return self.patterns_db["patterns"][pattern_name]
 
-        Args:
-            intents: List of parsed user intents
-            complexity: Difficulty level for educational appropriateness
+        # Fuzzy fallback (lowered threshold from 0.8 to 0.6)
+        best_match, best_score = None, 0.0
+        for trigger, pattern_name in self.trigger_aliases.items():
+            score = SequenceMatcher(None, action_lower, trigger).ratio()
+            if score > best_score and score >= 0.6:
+                best_score = score
+                best_match = self.patterns_db["patterns"][pattern_name]
 
-        Returns:
-            BlockSequence with blocks and educational explanation
-        """
-        if not intents:
-            return BlockSequence([], "No actions to create", complexity)
+        if best_match:
+            self.logger.info(f"Fuzzy match (score: {best_score:.2f})")
 
-        all_blocks = []
-        explanations = []
+        return best_match
 
-        for intent in intents:
-            blocks = self._generate_blocks_for_intent(intent, complexity)
-            all_blocks.extend(blocks)
-            explanations.append(self._get_explanation_for_intent(intent))
-
-        # Connect blocks in sequence
-        for i in range(len(all_blocks) - 1):
-            all_blocks[i].next_block = f"block_{i+2:03d}"
-
-        explanation = " ".join(explanations)
-
-        return BlockSequence(
-            blocks=all_blocks,
-            explanation=explanation,
-            difficulty=complexity,
-            estimated_time=len(all_blocks) * 100
-        )
-
-    def _generate_blocks_for_intent(self, intent: ParsedIntent, complexity: str) -> List[SnapBlock]:
-        """Generate blocks for a single intent"""
+    def _create_from_pattern(self, pattern: dict, intent: ParsedIntent) -> BlockSequence:
+        """Build block sequence from pattern definition"""
         blocks = []
 
-        # CRITICAL: If intent has a trigger, create the appropriate hat block first
+        # Add trigger block if specified
         if intent.trigger:
-            hat_block = self._create_hat_block_for_trigger(intent.trigger, intent.parameters)
-            if hat_block:
-                blocks.append(hat_block)
+            trigger_block = self._create_trigger_block(intent.trigger)
+            blocks.append(trigger_block)
 
-        # Check if this matches a known pattern
-        pattern = self._find_matching_pattern(intent.action)
-        if pattern:
-            action_blocks = self._create_blocks_from_pattern(pattern, intent)
-            blocks.extend(action_blocks)
-            return blocks
+        # Add pattern blocks
+        pattern_blocks = pattern.get("blocks", [])
+        for i, block_def in enumerate(pattern_blocks):
+            block_id = f"block_{len(blocks)+1:03d}"
+            next_id = f"block_{len(blocks)+2:03d}" if i < len(
+                pattern_blocks) - 1 else None
 
-        # Try to create individual block
-        block_def = self._find_block_definition(intent.action)
-        if block_def:
-            action_blocks = [self._create_block_from_definition(block_def, intent)]
-            blocks.extend(action_blocks)
-            return blocks
-
-        # Fallback: create a simple say block
-        fallback_block = SnapBlock(
-            opcode="doSay",
-            category=BlockCategory.LOOKS,
-            inputs={"MESSAGE": f"I want to {intent.action}"},
-            description=f"Says '{intent.action}'"
-        )
-        blocks.append(fallback_block)
-
-        return blocks
-
-    def _create_hat_block_for_trigger(self, trigger: str, parameters: Dict[str, Any]) -> Optional[SnapBlock]:
-        """Create the appropriate hat block for a trigger"""
-        trigger_lower = trigger.lower()
-
-        # Map triggers to Snap! hat blocks
-        if "key_press" in trigger_lower or "key" in trigger_lower:
-            key = parameters.get("key", "space")
-            return SnapBlock(
-                opcode="receiveKey",
-                category=BlockCategory.EVENTS,
-                inputs={"KEY_OPTION": key},
-                description=f"When {key} key pressed",
-                is_hat_block=True
-            )
-
-        elif "sprite_click" in trigger_lower or "clicked" in trigger_lower:
-            return SnapBlock(
-                opcode="receiveClick",
-                category=BlockCategory.EVENTS,
-                inputs={},
-                description="When this sprite clicked",
-                is_hat_block=True
-            )
-
-        elif "flag_click" in trigger_lower or "flag" in trigger_lower:
-            return SnapBlock(
-                opcode="receiveGo",
-                category=BlockCategory.EVENTS,
-                inputs={},
-                description="When green flag clicked",
-                is_hat_block=True
-            )
-
-        elif "broadcast" in trigger_lower:
-            message = parameters.get("message", "message1")
-            return SnapBlock(
-                opcode="receiveMessage",
-                category=BlockCategory.EVENTS,
-                inputs={"MSG": message},
-                description=f"When I receive {message}",
-                is_hat_block=True
-            )
-
-        # Default: green flag for unknown triggers
-        return SnapBlock(
-            opcode="receiveGo",
-            category=BlockCategory.EVENTS,
-            inputs={},
-            description="When green flag clicked",
-            is_hat_block=True
-        )
-
-    def _find_matching_pattern(self, action: str) -> Optional[Dict[str, Any]]:
-        """Find a pattern that matches the action"""
-        action_lower = action.lower()
-        
-        for pattern_name, pattern_data in self.patterns_db.get("patterns", {}).items():
-            triggers = pattern_data.get("triggers", [pattern_name])
-            if any(trigger in action_lower for trigger in triggers):
-                return pattern_data
-        
-        return None
-
-    def _create_blocks_from_pattern(self, pattern: Dict[str, Any], intent: ParsedIntent) -> List[SnapBlock]:
-        """Create blocks from a pattern definition"""
-        blocks = []
-
-        for i, block_spec in enumerate(pattern.get("blocks", [])):
             block = SnapBlock(
-                opcode=block_spec["opcode"],
-                category=BlockCategory(block_spec.get("category", "motion")),
-                inputs=block_spec.get("inputs", {}),
-                description=f"Pattern block {i+1}"
+                block_id=block_id,
+                opcode=block_def["opcode"],
+                category=block_def["category"],
+                inputs=block_def.get("inputs", {}).copy(),
+                is_hat_block=(i == 0 and not intent.trigger),
+                next=next_id
             )
+
+            # Override inputs with intent parameters
+            if intent.parameters:
+                for key, value in intent.parameters.items():
+                    param_key = key.upper()
+                    if param_key in block.inputs:
+                        block.inputs[param_key] = value
+
             blocks.append(block)
 
-        return blocks
-
-    def _find_block_definition(self, action: str) -> Optional[Dict[str, Any]]:
-        """Find a block definition that matches the action"""
-        action_lower = action.lower()
-
-        for category, blocks in self.blocks_db.get("blocks", {}).items():
-            for block_name, block_def in blocks.items():
-                if block_name in action_lower or action_lower in block_name:
-                    return block_def
-
-        return None
-
-    def _create_block_from_definition(self, block_def: Dict[str, Any], intent: ParsedIntent) -> SnapBlock:
-        """Create a block from a definition"""
-        inputs = {}
-
-        # Apply default values and extract from intent parameters
-        for param, default_val in block_def.get("default_values", {}).items():
-            # Check various parameter formats from the new parser
-            param_value = default_val
-            if param in intent.parameters:
-                param_value = intent.parameters[param]
-            elif param.lower() in intent.parameters:
-                param_value = intent.parameters[param.lower()]
-
-            inputs[param.upper()] = param_value
-
-        return SnapBlock(
-            opcode=block_def["opcode"],
-            category=BlockCategory(block_def["category"]),
-            inputs=inputs,
-            description=block_def.get("kid_explanation", "A Snap! block"),
-            is_hat_block=block_def.get("is_hat_block", False)
+        return BlockSequence(
+            blocks=blocks,
+            metadata={"pattern": pattern.get("name", "custom")}
         )
 
-    def _get_explanation_for_intent(self, intent: ParsedIntent) -> str:
-        """Generate kid-friendly explanation for an intent"""
-        if intent.trigger:
-            return f"When {intent.trigger}, the {intent.subject} will {intent.action}!"
-        else:
-            return f"The {intent.subject} will {intent.action}!"
+    def _create_trigger_block(self, trigger: str) -> SnapBlock:
+        """Create hat block from trigger string"""
+        trigger_lower = trigger.lower()
 
-    def format_for_snap(self, block_sequence: BlockSequence, target_sprite: str = "Sprite") -> Dict[str, Any]:
-        """
-        Format block sequence for Snap! bridge communication.
-        
-        Args:
-            block_sequence: Generated block sequence
-            target_sprite: Target sprite name
-            
-        Returns:
-            Dictionary formatted for WebSocket communication
-        """
+        # Map common triggers
+        if "flag" in trigger_lower or trigger_lower == "start":
+            opcode = "whenGreenFlag"
+            inputs = {}
+        elif "click" in trigger_lower:
+            opcode = "whenClicked"
+            inputs = {}
+        elif "key" in trigger_lower or len(trigger_lower) == 1:
+            opcode = "whenKeyPressed"
+            key = trigger_lower.replace("key", "").strip() or "space"
+            inputs = {"KEY_OPTION": key}
+        else:
+            opcode = "whenGreenFlag"
+            inputs = {}
+
+        return SnapBlock(
+            block_id="block_000",
+            opcode=opcode,
+            category="control",
+            inputs=inputs,
+            is_hat_block=True,
+            next="block_001"
+        )
+
+    # --- Generative Engine ---
+
+    def _select_model(self, user_description: str):
+        """Choose model based on complexity"""
+        word_count = len(user_description.split())
+        has_logic = any(w in user_description.lower()
+                        for w in ['if', 'when', 'while', 'until', 'and', 'then'])
+        return self.smart_model if (word_count > 15 or has_logic) else self.fast_model
+
+    def _get_example_outputs(self) -> List[Dict[str, Any]]:
+        """Generate few-shot examples for prompt"""
+        return [
+            {
+                "description": "make the sprite jump",
+                "output": {
+                    "command": "create_blocks",
+                    "payload": {
+                        "target_sprite": "Sprite",
+                        "scripts": [{
+                            "script_id": "script_001",
+                            "position": {"x": 50, "y": 50},
+                            "blocks": [
+                                {
+                                    "block_id": "block_001",
+                                    "opcode": "whenGreenFlag",
+                                    "category": "control",
+                                    "inputs": {},
+                                    "is_hat_block": True,
+                                    "next": "block_002"
+                                },
+                                {
+                                    "block_id": "block_002",
+                                    "opcode": "changeYBy",
+                                    "category": "motion",
+                                    "inputs": {"DY": 50},
+                                    "is_hat_block": False,
+                                    "next": "block_003"
+                                },
+                                {
+                                    "block_id": "block_003",
+                                    "opcode": "doWait",
+                                    "category": "control",
+                                    "inputs": {"DURATION": 0.3},
+                                    "is_hat_block": False,
+                                    "next": "block_004"
+                                },
+                                {
+                                    "block_id": "block_004",
+                                    "opcode": "changeYBy",
+                                    "category": "motion",
+                                    "inputs": {"DY": -50},
+                                    "is_hat_block": False,
+                                    "next": None
+                                }
+                            ]
+                        }]
+                    }
+                }
+            }
+        ]
+
+    def _build_gemini_prompt(self, user_request: str) -> str:
+        """Build comprehensive prompt with examples"""
+        examples = self._get_example_outputs()
+        examples_str = "\n\n".join([
+            f"Example {i+1}:\nUser: \"{ex['description']}\"\nJSON Output:\n{json.dumps(ex['output'], indent=2)}"
+            for i, ex in enumerate(examples)
+        ])
+
+        categorized_opcodes = {}
+        for cat_name, blocks in self.blocks_db.get('blocks', {}).items():
+            categorized_opcodes[cat_name] = list(blocks.keys())
+
+        prompt = f"""You are an expert Snap! block generator. Output ONLY valid JSON - no markdown, no explanations.
+
+**CRITICAL RULES:**
+1. Output MUST be a single, parseable JSON object
+2. Use ONLY opcodes from the allowlist - category MUST match the opcode's actual category
+3. First block MUST be an event trigger with "is_hat_block": true
+4. Chain blocks via "next" property using block_id references
+5. Last block's "next" MUST be null
+6. All block_ids must be unique within the script
+
+**EXAMPLES TO FOLLOW:**
+{examples_str}
+
+**AVAILABLE OPCODES BY CATEGORY:**
+{json.dumps(categorized_opcodes, indent=2)}
+
+**USER REQUEST:**
+"{user_request}"
+
+**GENERATE JSON NOW (raw JSON only, no markdown):**
+"""
+        return prompt
+
+    def _call_generative_engine(self, user_description: str, max_retries: int = 2) -> dict:
+        """Call Gemini with retry logic and validation"""
+        # Cost control
+        if self._api_call_count >= self._daily_api_limit:
+            self.logger.error("API daily limit exceeded")
+            return self._create_error_fallback("API limit exceeded", user_description)
+
+        model = self._select_model(user_description)
+
+        for attempt in range(max_retries):
+            try:
+                prompt = self._build_gemini_prompt(user_description)
+
+                # Track API costs
+                self._api_call_count += 1
+                tokens_estimate = len(prompt.split()) * 1.3
+                self._api_cost_estimate += (tokens_estimate / 1000) * 0.0001
+
+                config = {
+                    "temperature": 0.1,
+                    "top_p": 0.8,
+                    "top_k": 40,
+                    "max_output_tokens": 2048
+                }
+
+                response = model.generate_content(
+                    prompt, generation_config=config)
+                cleaned = self._extract_json_from_response(response.text)
+                generated_json = json.loads(cleaned)
+
+                # Validate BEFORE returning
+                is_valid, error = validate_snap_json(
+                    generated_json,
+                    self.allowed_opcodes,
+                    self.blocks_db  # <-- ADD THIS ARGUMENT
+                )
+                if is_valid:
+                    self.logger.info(
+                        f"Generative success (attempt {attempt + 1})")
+                    return generated_json
+                else:
+                    self.logger.warning(
+                        f"Validation failed: {error}, retrying...")
+                    continue
+
+            except json.JSONDecodeError as e:
+                self.logger.warning(
+                    f"JSON parse error (attempt {attempt + 1}): {e}")
+            except Exception as e:
+                self.logger.error(
+                    f"Generative error (attempt {attempt + 1}): {e}")
+
+        return self._create_error_fallback("All validation retries failed", user_description)
+
+    def _extract_json_from_response(self, text: str) -> str:
+        """Extract JSON from potentially markdown-wrapped response"""
+        text = text.strip().replace("```json", "").replace("```", "")
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start != -1 and end > start:
+            return text[start:end].strip()
+        raise ValueError("No valid JSON object found in response")
+
+    # --- Caching ---
+
+    def _get_cache_key(self, user_description: str) -> str:
+        return hashlib.md5(user_description.lower().strip().encode()).hexdigest()
+
+    def _check_cache(self, user_description: str) -> Optional[dict]:
+        key = self._get_cache_key(user_description)
+        if key in self._generative_cache:
+            self._generative_cache.move_to_end(key)  # Mark as recently used
+            return self._generative_cache[key]
+        return None
+
+    def _store_cache(self, user_description: str, result: dict):
+        key = self._get_cache_key(user_description)
+
+        if key in self._generative_cache:
+            self._generative_cache.move_to_end(key)
+        else:
+            if len(self._generative_cache) >= self._cache_max_size:
+                self._generative_cache.popitem(last=False)  # Remove oldest
+            self._generative_cache[key] = result
+
+    # --- Formatting & Utilities ---
+
+    def format_for_snap(self, block_sequence: BlockSequence, target_sprite: str) -> dict:
+        """Convert BlockSequence to Snap! JSON format"""
         formatted_blocks = []
-        
-        for i, block in enumerate(block_sequence.blocks):
-            formatted_block = {
-                "block_id": f"block_{i+1:03d}",
+
+        for block in block_sequence.blocks:
+            formatted_blocks.append({
+                "block_id": block.block_id,
                 "opcode": block.opcode,
-                "category": block.category.value,
+                "category": block.category,
                 "inputs": block.inputs,
                 "is_hat_block": block.is_hat_block,
-                "next": block.next_block
-            }
-            formatted_blocks.append(formatted_block)
-        
+                "next": block.next
+            })
+
         return {
             "command": "create_blocks",
             "payload": {
@@ -373,26 +458,54 @@ class SnapBlockGenerator:
                     "script_id": "script_001",
                     "position": {"x": 50, "y": 50},
                     "blocks": formatted_blocks
-                }],
-                "visual_feedback": {
-                    "animate_creation": True,
-                    "highlight_duration_ms": 2000,
-                    "show_explanation": True,
-                    "explanation_text": block_sequence.explanation
-                }
+                }]
             }
         }
 
-    def get_available_actions(self) -> List[str]:
-        """Get list of available actions/patterns"""
-        actions = []
-        
-        # Add patterns
-        for pattern_name, pattern_data in self.patterns_db.get("patterns", {}).items():
-            actions.extend(pattern_data.get("triggers", [pattern_name]))
-        
-        # Add individual blocks
-        for category, blocks in self.blocks_db.get("blocks", {}).items():
-            actions.extend(blocks.keys())
-        
-        return sorted(list(set(actions)))
+    def _create_error_fallback(self, error: str, user_description: str) -> dict:
+        """Create error display block"""
+        return {
+            "command": "create_blocks",
+            "payload": {
+                "target_sprite": "Sprite",
+                "scripts": [{
+                    "script_id": "error_001",
+                    "position": {"x": 50, "y": 50},
+                    "blocks": [
+                        {
+                            "block_id": "error_block_000",
+                            "opcode": "whenGreenFlag",
+                            "category": "control",
+                            "inputs": {},
+                            "is_hat_block": True,
+                            "next": "error_block_001"
+                        },
+                        {
+                            "block_id": "error_block_001",
+                            "opcode": "doSay",
+                            "category": "looks",
+                            "inputs": {
+                                "message": f"Generation failed: {error[:50]}... | Request: '{user_description[:30]}'"
+                            },
+                            "is_hat_block": False,
+                            "next": None
+                        }
+                    ]
+                }],
+                "error": error,
+                "user_request": user_description
+            }
+        }
+
+    def get_metrics(self) -> dict:
+        """Return performance metrics"""
+        total = sum(self._metrics.values())
+        return {
+            **self._metrics,
+            "total_requests": total,
+            "rule_based_rate": self._metrics["rule_based_hits"] / max(total, 1),
+            "generative_rate": self._metrics["generative_hits"] / max(total, 1),
+            "cache_hit_rate": self._metrics["cache_hits"] / max(total, 1),
+            "api_calls": self._api_call_count,
+            "estimated_cost": f"${self._api_cost_estimate:.4f}"
+        }

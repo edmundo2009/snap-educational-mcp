@@ -1,278 +1,155 @@
-# mcp_server/parsers/validators.py - Input Validation and Safety Checks
 
-import re
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
+# mcp_server/parsers/validators.py
 
+from typing import Dict, Any, List, Optional, Tuple, Set
+from pydantic import BaseModel, field_validator, ValidationError
 
-@dataclass
-class ValidationResult:
-    """Result of input validation"""
-    is_valid: bool
-    errors: List[str]
-    warnings: List[str]
-    sanitized_input: Optional[str] = None
+# --- Type Aliases for Clarity ---
+SnapJSON = Dict[str, Any]
+ValidationResult = Tuple[bool, Optional[str]]
+BlocksDB = Dict[str, Any]
+
+# --- Pydantic Schemas for Structural Validation ---
 
 
-class SnapInputValidator:
+class SnapBlockSchema(BaseModel):
+    block_id: str
+    opcode: str
+    category: str
+    inputs: Dict[str, Any]
+    is_hat_block: bool
+    next: Optional[str] = None
+
+
+class ScriptSchema(BaseModel):
+    script_id: str
+    position: Dict[str, int]
+    blocks: List[SnapBlockSchema]
+
+    @field_validator('position')
+    @classmethod
+    def validate_position(cls, v):
+        if 'x' not in v or 'y' not in v:
+            raise ValueError("Position must contain 'x' and 'y' keys")
+        return v
+
+
+class PayloadSchema(BaseModel):
+    target_sprite: str
+    scripts: List[ScriptSchema]
+    error: Optional[str] = None
+    user_request: Optional[str] = None
+
+    @field_validator('target_sprite')
+    @classmethod
+    def validate_sprite_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError("target_sprite cannot be empty")
+        return v
+
+
+class SnapJSONSchema(BaseModel):
+    command: str
+    payload: PayloadSchema
+
+    @field_validator('command')
+    @classmethod
+    def validate_command(cls, v: str) -> str:
+        # Fix for Pydantic v2 pattern validation
+        if v != "create_blocks":
+            raise ValueError(f"command must be 'create_blocks', got '{v}'")
+        return v
+
+# --- Helper Function ---
+
+
+def _get_opcode_category(opcode: str, blocks_db: BlocksDB) -> Optional[str]:
+    """Finds the authoritative category for a given opcode from the knowledge base."""
+    for category, blocks in blocks_db.get('blocks', {}).items():
+        if opcode in blocks:
+            return category
+    return None
+
+# --- Main Validator Function ---
+
+
+def validate_snap_json(
+    generated_json: SnapJSON,
+    allowed_opcodes: Set[str],
+    blocks_db: BlocksDB
+) -> ValidationResult:
     """
-    Validates and sanitizes user inputs for Snap! programming.
-    
-    Ensures inputs are safe, educational, and appropriate for children.
+    Comprehensive validation: Structure -> Opcodes -> Categories -> Connectivity -> Logic.
     """
+    # Passthrough for trusted error blocks generated internally.
+    if generated_json.get("payload", {}).get("error"):
+        return True, None
 
-    def __init__(self):
-        self.max_input_length = 500
-        self.blocked_words = self._load_blocked_words()
-        self.safe_patterns = self._build_safe_patterns()
+    # 1. Structural Validation (Pydantic)
+    try:
+        SnapJSONSchema.model_validate(generated_json)
+    except ValidationError as e:
+        error = e.errors()[0]
+        field = ".".join(map(str, error['loc']))
+        return False, f"Schema error at '{field}': {error['msg']}"
 
-    def _load_blocked_words(self) -> List[str]:
-        """Load list of inappropriate words/phrases"""
-        # In production, this would load from a file
-        return [
-            # Placeholder - would contain inappropriate content filters
-            "delete", "remove", "destroy", "hack", "break"
-        ]
+    valid_hat_opcodes = {'whenGreenFlag', 'whenClicked', 'whenKeyPressed',
+                         'receiveGo', 'receiveClick', 'receiveKey', 'whenIReceive'}
+    script_ids = set()
 
-    def _build_safe_patterns(self) -> List[str]:
-        """Build patterns for safe, educational content"""
-        return [
-            r"make.*move", r"when.*pressed", r"jump", r"dance", r"spin",
-            r"change.*color", r"play.*sound", r"say", r"hide", r"show",
-            r"follow.*mouse", r"bounce", r"grow", r"shrink", r"turn"
-        ]
+    for script in generated_json['payload']['scripts']:
+        if script['script_id'] in script_ids:
+            return False, f"Duplicate script_id found: '{script['script_id']}'"
+        script_ids.add(script['script_id'])
 
-    def validate_user_input(self, text: str) -> ValidationResult:
-        """
-        Validate user input for safety and appropriateness.
-        
-        Args:
-            text: User input to validate
-            
-        Returns:
-            ValidationResult with validation status and any issues
-        """
-        errors = []
-        warnings = []
-        sanitized = text.strip()
+        if not script['blocks']:
+            return False, f"Script '{script['script_id']}' cannot be empty."
 
-        # Check length
-        if len(text) > self.max_input_length:
-            errors.append(f"Input too long (max {self.max_input_length} characters)")
+        all_ids_in_script = set()
+        next_refs = set()
 
-        # Check for empty input
-        if not text.strip():
-            errors.append("Input cannot be empty")
+        for i, block in enumerate(script['blocks']):
+            # 2. Block-level ID and Logic Validation
+            if block['block_id'] in all_ids_in_script:
+                return False, f"Duplicate block_id '{block['block_id']}' in script '{script['script_id']}'"
+            all_ids_in_script.add(block['block_id'])
 
-        # Check for blocked content
-        blocked_found = self._check_blocked_content(text.lower())
-        if blocked_found:
-            errors.append(f"Inappropriate content detected: {', '.join(blocked_found)}")
+            # 3. Hat Block Validation (Correctness)
+            if i == 0:
+                if not block['is_hat_block']:
+                    return False, f"First block '{block['block_id']}' must be a hat block."
+                if block['opcode'] not in valid_hat_opcodes:
+                    return False, f"Invalid hat opcode '{block['opcode']}'. Must be an event block."
+            elif block['is_hat_block']:
+                return False, f"Block '{block['block_id']}' at position {i} cannot be a hat block."
 
-        # Check for potentially unsafe patterns
-        unsafe_patterns = self._check_unsafe_patterns(text)
-        if unsafe_patterns:
-            warnings.extend([f"Potentially unsafe: {pattern}" for pattern in unsafe_patterns])
+            # 4. Opcode and Category Validation (Security & Correctness)
+            if block['opcode'] not in allowed_opcodes:
+                return False, f"Disallowed opcode '{block['opcode']}' in block '{block['block_id']}'."
 
-        # Sanitize input
-        sanitized = self._sanitize_input(text)
+            expected_category = _get_opcode_category(
+                block['opcode'], blocks_db)
+            if block['category'] != expected_category:
+                return False, f"Opcode '{block['opcode']}' must have category '{expected_category}', but got '{block['category']}'."
 
-        # Check if input seems educational
-        if not self._is_educational_content(text):
-            warnings.append("Input doesn't seem to be programming-related")
+            if block['next']:
+                next_refs.add(block['next'])
 
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings,
-            sanitized_input=sanitized
-        )
+        # 5. Connectivity Validation
+        dangling_refs = next_refs - all_ids_in_script
+        if dangling_refs:
+            return False, f"Dangling 'next' references found in script '{script['script_id']}': {dangling_refs}"
 
-    def _check_blocked_content(self, text: str) -> List[str]:
-        """Check for blocked words/phrases"""
-        found = []
-        for word in self.blocked_words:
-            if word in text:
-                found.append(word)
-        return found
+        # Check for unreachable (orphaned) blocks
+        first_block_id = script['blocks'][0]['block_id']
+        reachable_blocks = {first_block_id}
+        # Build the set of all blocks that are pointed to
+        for b in script['blocks']:
+            if b['next']:
+                reachable_blocks.add(b['next'])
 
-    def _check_unsafe_patterns(self, text: str) -> List[str]:
-        """Check for potentially unsafe patterns"""
-        unsafe = []
-        
-        # Check for system-related commands
-        system_patterns = [
-            r"system", r"file", r"directory", r"folder", r"disk",
-            r"network", r"internet", r"download", r"upload"
-        ]
-        
-        for pattern in system_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                unsafe.append(f"System-related term: {pattern}")
+        unreachable = all_ids_in_script - reachable_blocks
+        if unreachable:
+            return False, f"Unreachable (orphaned) blocks in script '{script['script_id']}': {unreachable}"
 
-        return unsafe
-
-    def _sanitize_input(self, text: str) -> str:
-        """Sanitize input by removing/replacing problematic content"""
-        # Remove excessive whitespace
-        sanitized = re.sub(r'\s+', ' ', text.strip())
-        
-        # Remove special characters that could be problematic
-        sanitized = re.sub(r'[<>{}[\]\\]', '', sanitized)
-        
-        # Limit to reasonable character set
-        sanitized = re.sub(r'[^\w\s.,!?-]', '', sanitized)
-        
-        return sanitized
-
-    def _is_educational_content(self, text: str) -> bool:
-        """Check if content seems educational/programming-related"""
-        educational_keywords = [
-            "sprite", "move", "jump", "turn", "color", "sound", "when", "if",
-            "loop", "repeat", "forever", "click", "press", "key", "mouse",
-            "dance", "spin", "bounce", "hide", "show", "say", "play"
-        ]
-        
-        text_lower = text.lower()
-        matches = sum(1 for keyword in educational_keywords if keyword in text_lower)
-        
-        # Consider it educational if it has at least one programming keyword
-        return matches > 0
-
-    def validate_block_parameters(self, parameters: Dict[str, Any]) -> ValidationResult:
-        """
-        Validate block parameters for safety and reasonableness.
-        
-        Args:
-            parameters: Dictionary of block parameters
-            
-        Returns:
-            ValidationResult for the parameters
-        """
-        errors = []
-        warnings = []
-
-        for param_name, param_value in parameters.items():
-            param_errors, param_warnings = self._validate_single_parameter(param_name, param_value)
-            errors.extend(param_errors)
-            warnings.extend(param_warnings)
-
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings
-        )
-
-    def _validate_single_parameter(self, name: str, value: Any) -> Tuple[List[str], List[str]]:
-        """Validate a single parameter"""
-        errors = []
-        warnings = []
-
-        # Numeric parameter validation
-        if isinstance(value, (int, float)):
-            if name in ["steps", "distance"]:
-                if abs(value) > 1000:
-                    warnings.append(f"{name} value {value} is very large")
-                if value == 0:
-                    warnings.append(f"{name} value is zero - sprite won't move")
-            
-            elif name in ["degrees", "angle"]:
-                if abs(value) > 360:
-                    warnings.append(f"{name} value {value} is more than a full rotation")
-            
-            elif name in ["duration", "time"]:
-                if value < 0:
-                    errors.append(f"{name} cannot be negative")
-                if value > 60:
-                    warnings.append(f"{name} value {value} seconds is very long")
-            
-            elif name in ["size", "scale"]:
-                if value <= 0:
-                    errors.append(f"{name} must be positive")
-                if value > 500:
-                    warnings.append(f"{name} value {value}% is very large")
-
-        # String parameter validation
-        elif isinstance(value, str):
-            if name in ["message", "text"]:
-                if len(value) > 100:
-                    warnings.append(f"{name} is very long ({len(value)} characters)")
-                
-                # Check for inappropriate content
-                blocked = self._check_blocked_content(value.lower())
-                if blocked:
-                    errors.append(f"Inappropriate content in {name}: {', '.join(blocked)}")
-            
-            elif name in ["key"]:
-                valid_keys = ["space", "up arrow", "down arrow", "left arrow", "right arrow", 
-                             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-                             "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
-                if value.lower() not in valid_keys:
-                    warnings.append(f"Unusual key: {value}")
-
-        return errors, warnings
-
-    def suggest_safe_alternatives(self, unsafe_input: str) -> List[str]:
-        """Suggest safe alternatives for unsafe input"""
-        suggestions = []
-        
-        # If input contains blocked words, suggest alternatives
-        if any(word in unsafe_input.lower() for word in self.blocked_words):
-            suggestions.extend([
-                "Try describing what you want the sprite to do",
-                "Focus on movement, colors, sounds, or animations",
-                "Example: 'make sprite jump when space is pressed'"
-            ])
-        
-        # If input is too long, suggest simplification
-        if len(unsafe_input) > self.max_input_length:
-            suggestions.append("Try breaking your request into smaller parts")
-        
-        # If input doesn't seem programming-related
-        if not self._is_educational_content(unsafe_input):
-            suggestions.extend([
-                "Try using programming words like: move, jump, turn, color, sound",
-                "Example: 'make sprite dance and change colors'",
-                "Example: 'when mouse clicked, sprite follows mouse'"
-            ])
-
-        return suggestions
-
-    def is_age_appropriate(self, text: str, age_group: str = "elementary") -> bool:
-        """
-        Check if content is appropriate for the target age group.
-        
-        Args:
-            text: Content to check
-            age_group: Target age group (elementary, middle, high)
-            
-        Returns:
-            True if content is age-appropriate
-        """
-        # For now, just check against blocked words
-        # In production, this would be more sophisticated
-        blocked = self._check_blocked_content(text.lower())
-        return len(blocked) == 0
-
-    def get_complexity_score(self, text: str) -> int:
-        """
-        Get complexity score (1-10) for the input.
-        
-        Higher scores indicate more complex programming concepts.
-        """
-        complexity_indicators = {
-            1: ["move", "turn", "say", "color"],
-            3: ["when", "if", "repeat", "loop"],
-            5: ["variable", "list", "function", "custom"],
-            7: ["clone", "broadcast", "sensor"],
-            9: ["first-class", "lambda", "recursion"]
-        }
-        
-        max_complexity = 1
-        text_lower = text.lower()
-        
-        for level, indicators in complexity_indicators.items():
-            if any(indicator in text_lower for indicator in indicators):
-                max_complexity = max(max_complexity, level)
-        
-        return max_complexity
+    return True, None

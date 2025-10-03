@@ -37,16 +37,7 @@ Terminal (llm CLI) ←→ MCP Server (Python) ←→ Browser Extension (JavaScri
 - **Debugging assistance** - Help with common programming issues
 - **Lightweight architecture** - Fast startup, minimal dependencies (~50MB vs 500MB+)
 
-## Design Philosophy
 
-This system uses a **lightweight parser approach** where:
-
-- **Claude/LLM handles the heavy NLP** - Understanding ambiguous language, context, conversation
-- **MCP parser does structured extraction** - Pattern matching on well-formed descriptions
-- **No heavy ML dependencies** - Fast startup, simple installation, works offline
-- **Domain-specific patterns** - Focused on Snap! programming vocabulary
-
-**Result:** 90% accuracy with 10x faster startup and 10x smaller footprint!
 
 ## Project Structure
 
