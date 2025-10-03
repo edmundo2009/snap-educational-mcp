@@ -1,0 +1,92 @@
+{
+  "command": "create_blocks",
+  "payload": {
+    "target_sprite": "Sprite",
+    "scripts": [
+      {
+        "script_id": "script_001",
+        "position": {
+          "x": 50,
+          "y": 50
+        },
+        "blocks": [
+          {
+            "block_id": "math_block_001",
+            "opcode": "setVar",
+            "category": "data",
+            "inputs": {
+              "VAR": "quantity1",
+              "VALUE": "7.0"
+            },
+            "is_hat_block": true,
+            "next": "math_block_002"
+          },
+          {
+            "block_id": "math_block_002",
+            "opcode": "setVar",
+            "category": "data",
+            "inputs": {
+              "VAR": "quantity2",
+              "VALUE": "4.0"
+            },
+            "is_hat_block": false,
+            "next": "math_block_003"
+          },
+          {
+            "block_id": "math_block_003",
+            "opcode": "setVar",
+            "category": "data",
+            "inputs": {
+              "VAR": "unit_rate",
+              "VALUE": "7.0 / 4.0"
+            },
+            "is_hat_block": false,
+            "next": "math_block_004"
+          },
+          {
+            "block_id": "math_block_004",
+            "opcode": "say",
+            "category": "looks",
+            "inputs": {
+              "MESSAGE": "Unit rate is: (7.0 / 4.0)"
+            },
+            "is_hat_block": false,
+            "next": "math_block_005"
+          },
+          {
+            "block_id": "math_block_005",
+            "opcode": "setVar",
+            "category": "data",
+            "inputs": {
+              "VAR": "target_quantity",
+              "VALUE": "35.0"
+            },
+            "is_hat_block": false,
+            "next": "math_block_006"
+          },
+          {
+            "block_id": "math_block_006",
+            "opcode": "setVar",
+            "category": "data",
+            "inputs": {
+              "VAR": "result",
+              "VALUE": "(7.0 / 4.0) * 35.0"
+            },
+            "is_hat_block": false,
+            "next": "math_block_007"
+          },
+          {
+            "block_id": "math_block_007",
+            "opcode": "say",
+            "category": "looks",
+            "inputs": {
+              "MESSAGE": "Final answer: (7.0 / 4.0) * 35.0"
+            },
+            "is_hat_block": false,
+            "next": null
+          }
+        ]
+      }
+    ]
+  }
+}

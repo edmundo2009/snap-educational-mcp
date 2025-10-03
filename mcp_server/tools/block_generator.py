@@ -503,10 +503,11 @@ class SnapBlockGenerator:
             # Create SnapBlock object
             snap_block = SnapBlock(
                 block_id=block_id,
-                opcode=block.get("opcode", "say"),
-                category=self._get_block_category(block.get("opcode", "say")),
+                opcode=self._normalize_opcode(block.get("opcode", "say")),
+                category=self._get_block_category(
+                    self._normalize_opcode(block.get("opcode", "say"))),
                 inputs=self._format_block_inputs(block),
-                is_hat_block=(i == 0),  # First block is hat block
+                is_hat_block=(i == 0),
                 next=next_id
             )
 
@@ -524,12 +525,19 @@ class SnapBlockGenerator:
         """Get category for a block opcode."""
         # Default categories for common opcodes
         category_map = {
-            "setVar": "data",
-            "say": "looks",
+            "doSetVar": "variables",
             "doSay": "looks",
             "whenGreenFlag": "control"
         }
         return category_map.get(opcode, "looks")
+
+    def _normalize_opcode(self, opcode: str) -> str:
+        """Convert to Snap! native opcodes"""
+        mapping = {
+            "setVar": "doSetVar",
+            "say": "doSay"
+        }
+        return mapping.get(opcode, opcode)
 
     def _format_block_inputs(self, block: dict) -> dict:
         """Format block inputs for Snap! format."""

@@ -204,5 +204,52 @@
     "connected": false,
     "connected_at": "2025-10-04T00:08:32.119521",
     "disconnected_at": "2025-10-04T00:16:17.305031"
+  },
+  "sess_f1639079794a": {
+    "token": "snap-mcp-6b094af6-4972-46f8-8e2c-59e8b2d849f0",
+    "created_at": "2025-10-03T16:38:23.165219",
+    "expires_at": "2025-10-03T17:08:23.165219",
+    "connected": true,
+    "connected_at": "2025-10-04T01:38:54.431335"
+  },
+  "sess_457d553165c8": {
+    "token": "snap-mcp-8c24adb2-a8d6-4a3f-a056-406845844b41",
+    "created_at": "2025-10-03T16:48:12.968283",
+    "expires_at": "2025-10-03T17:18:12.968283",
+    "connected": false,
+    "connected_at": "2025-10-04T01:48:42.597387",
+    "disconnected_at": "2025-10-04T02:04:01.382473"
+  },
+  "sess_caae2e6cf6b6": {
+    "token": "snap-mcp-130bf49b-9efd-46e7-93f0-fd3897314656",
+    "created_at": "2025-10-03T17:07:01.728736",
+    "expires_at": "2025-10-03T17:37:01.728736",
+    "connected": true,
+    "connected_at": "2025-10-04T02:08:13.973106"
+  },
+  "sess_39de841c91b9": {
+    "token": "snap-mcp-9ae0bb4f-dc66-4f1a-bf8e-e3812b0dc1e3",
+    "created_at": "2025-10-03T17:26:57.395708",
+    "expires_at": "2025-10-03T17:56:57.395708",
+    "connected": false
+  },
+  "sess_17c4d8366291": {
+    "token": "snap-mcp-e4db23d8-738f-483c-85cb-7a04205b5a71",
+    "created_at": "2025-10-03T17:37:48.385964",
+    "expires_at": "2025-10-03T18:07:48.385964",
+    "connected": false
+  },
+  "sess_4ee8b74d446d": {
+    "token": "snap-mcp-e9a2f734-dd1a-47e6-8ba9-157fa7f28325",
+    "created_at": "2025-10-03T18:14:45.350978",
+    "expires_at": "2025-10-03T18:44:45.350978",
+    "connected": false
+  },
+  "sess_b14b14c57b86": {
+    "token": "snap-mcp-452e92aa-c5fb-48ea-ac52-b21071df4900",
+    "created_at": "2025-10-03T18:53:19.090436",
+    "expires_at": "2025-10-03T19:23:19.090436",
+    "connected": true,
+    "connected_at": "2025-10-04T03:53:32.786953"
   }
 }
