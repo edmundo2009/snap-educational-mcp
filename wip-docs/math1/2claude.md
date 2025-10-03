@@ -210,19 +210,15 @@ def test_poc():
 ## Actionable Tasks (In Order)
 
 ```bash
-# Day 1 Morning
 [ ] Create math_patterns.json with 3 patterns
 [ ] Write parse_math_problem() function (regex + keyword matching)
 
-# Day 1 Afternoon  
 [ ] Modify block_generator.py to handle template substitution
 [ ] Write 3 test cases
 
-# Day 2 Morning
 [ ] Run tests, fix bugs until all pass
 [ ] Manually test one example in actual Snap!
 
-# Day 2 Afternoon
 [ ] Document what worked/failed
 [ ] Plan Phase 2 expansions
 ```

@@ -1,0 +1,39 @@
+{
+  "patterns": {
+    "unit_rate": {
+      "triggers": ["per hour", "per lawn", "rate", "speed", "unit rate", "hours to mow", "how many in"],
+      "variables": ["quantity1", "quantity2", "unit_rate", "target_quantity", "result"],
+      "blocks": [
+        {"opcode": "setVar", "var": "quantity1", "value": "{{num1}}"},
+        {"opcode": "setVar", "var": "quantity2", "value": "{{num2}}"},
+        {"opcode": "setVar", "var": "unit_rate", "value": "{{num1}} / {{num2}}"},
+        {"opcode": "say", "message": "Unit rate is: ({{num1}} / {{num2}})"},
+        {"opcode": "setVar", "var": "target_quantity", "value": "{{num3}}"},
+        {"opcode": "setVar", "var": "result", "value": "({{num1}} / {{num2}}) * {{num3}}"},
+        {"opcode": "say", "message": "Final answer: ({{num1}} / {{num2}}) * {{num3}}"}
+      ]
+    },
+    "ratio_equivalent": {
+      "triggers": ["equivalent ratio", "scale", "multiply both"],
+      "variables": ["ratio_a", "ratio_b", "scale_factor", "new_a", "new_b"],
+      "blocks": [
+        {"opcode": "setVar", "var": "ratio_a", "value": "{{num1}}"},
+        {"opcode": "setVar", "var": "ratio_b", "value": "{{num2}}"},
+        {"opcode": "setVar", "var": "scale_factor", "value": "{{num3}}"},
+        {"opcode": "setVar", "var": "new_a", "value": "{{num1}} * {{num3}}"},
+        {"opcode": "setVar", "var": "new_b", "value": "{{num2}} * {{num3}}"},
+        {"opcode": "say", "message": "New ratio: {{new_a}}:{{new_b}}"}
+      ]
+    },
+    "simple_division": {
+      "triggers": ["divide", "split", "share equally"],
+      "variables": ["total", "parts", "each_part"],
+      "blocks": [
+        {"opcode": "setVar", "var": "total", "value": "{{num1}}"},
+        {"opcode": "setVar", "var": "parts", "value": "{{num2}}"},
+        {"opcode": "setVar", "var": "each_part", "value": "{{num1}} / {{num2}}"},
+        {"opcode": "say", "message": "Each part gets: {{each_part}}"}
+      ]
+    }
+  }
+}

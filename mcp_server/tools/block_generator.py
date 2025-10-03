@@ -8,15 +8,16 @@ from datetime import datetime
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-import google.generativeai as genai
 from difflib import SequenceMatcher
 
 from ..parsers.intent_parser import ParsedIntent
 from ..parsers.validators import validate_snap_json
+from ..parsers.math_parser import parse_math_problem
 
-# Configure Gemini client
+
+import google.generativeai as genai
+# Configure the API key for the entire module once.
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-
 
 @dataclass
 class SnapBlock:
@@ -50,6 +51,14 @@ class SnapBlockGenerator:
         self.allowed_opcodes = self._get_all_opcodes()
         self.trigger_aliases = self._build_trigger_map()
 
+        # # --- Client and Model Initialization (DEPRECATED SECTION) ---
+        # # 1. Create a single client instance with your API key
+        # self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+        # # 2. Get your model instances from the authenticated client
+        # self.fast_model = self.client.get_generative_model('gemini-1.5-flash')
+        # self.smart_model = self.client.get_generative_model('gemini-1.5-pro')
+
         # Model selection
         self.fast_model = genai.GenerativeModel('gemini-1.5-flash')
         self.smart_model = genai.GenerativeModel('gemini-1.5-pro')
@@ -73,6 +82,9 @@ class SnapBlockGenerator:
         }
 
     # --- Initialization ---
+    def get_available_actions(self) -> list[str]:
+        """Return a list of all known rule-based trigger actions."""
+        return list(self.trigger_aliases.keys())
 
     def _load_json(self, path: str) -> dict:
         with open(path, 'r', encoding='utf-8') as f:
@@ -433,6 +445,89 @@ class SnapBlockGenerator:
             if len(self._generative_cache) >= self._cache_max_size:
                 self._generative_cache.popitem(last=False)  # Remove oldest
             self._generative_cache[key] = result
+
+    # --- Math Pattern Handling ---
+
+    def generate_from_math_pattern(self, parsed: dict) -> dict:
+        """Replace {{num1}}, {{num2}} etc. with actual numbers."""
+
+        if not parsed["pattern"]:
+            return self._create_error_fallback("No pattern matched", parsed["text"])
+
+        # Load math patterns
+        math_patterns_path = os.path.join(os.path.dirname(self.patterns_path), 'math_patterns.json')
+        try:
+            with open(math_patterns_path, 'r', encoding='utf-8') as f:
+                math_patterns_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            return self._create_error_fallback(f"Math patterns file error: {e}", parsed["text"])
+
+        if parsed["pattern"] not in math_patterns_data.get("patterns", {}):
+            return self._create_error_fallback(f"Pattern '{parsed['pattern']}' not found", parsed["text"])
+
+        # Get pattern data
+        pattern = math_patterns_data["patterns"][parsed["pattern"]]
+        blocks = pattern["blocks"]
+        numbers = parsed["numbers"]
+
+        # Simple substitution
+        snap_blocks = []
+        for i, block_template in enumerate(blocks):
+            block = block_template.copy()
+            block_id = f"math_block_{i+1:03d}"
+            next_id = f"math_block_{i+2:03d}" if i < len(blocks) - 1 else None
+
+            # Replace {{num1}} with numbers[0], etc.
+            for key, value in block.items():
+                if isinstance(value, str):
+                    for j, num in enumerate(numbers):
+                        value = value.replace(f"{{{{num{j+1}}}}}", str(num))
+                    block[key] = value
+
+            # Create SnapBlock object
+            snap_block = SnapBlock(
+                block_id=block_id,
+                opcode=block.get("opcode", "say"),
+                category=self._get_block_category(block.get("opcode", "say")),
+                inputs=self._format_block_inputs(block),
+                is_hat_block=(i == 0),  # First block is hat block
+                next=next_id
+            )
+
+            snap_blocks.append(snap_block)
+
+        # Create block sequence
+        block_sequence = BlockSequence(
+            blocks=snap_blocks,
+            metadata={"pattern": parsed["pattern"], "math_problem": True}
+        )
+
+        return self.format_for_snap(block_sequence, "Sprite")
+
+    def _get_block_category(self, opcode: str) -> str:
+        """Get category for a block opcode."""
+        # Default categories for common opcodes
+        category_map = {
+            "setVar": "data",
+            "say": "looks",
+            "doSay": "looks",
+            "whenGreenFlag": "control"
+        }
+        return category_map.get(opcode, "looks")
+
+    def _format_block_inputs(self, block: dict) -> dict:
+        """Format block inputs for Snap! format."""
+        inputs = {}
+
+        # Handle different input types
+        if "var" in block:
+            inputs["VAR"] = block["var"]
+        if "value" in block:
+            inputs["VALUE"] = block["value"]
+        if "message" in block:
+            inputs["MESSAGE"] = block["message"]
+
+        return inputs
 
     # --- Formatting & Utilities ---
 

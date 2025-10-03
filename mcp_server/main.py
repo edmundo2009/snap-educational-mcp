@@ -1,4 +1,6 @@
 # mcp_server/main.py - Snap! Educational MCP Server
+from dotenv import load_dotenv
+load_dotenv()
 
 import os
 import sys
@@ -605,6 +607,123 @@ async def generate_snap_blocks(
 			"debug_info": {
 				"description": description,
 				"complexity": complexity,
+				"execution_mode": execution_mode
+			}
+		}
+
+
+@mcp.tool()
+async def generate_math_blocks(
+	problem_text: str,
+	grade_level: int = 6,
+	execution_mode: Literal["execute", "preview", "explain"] = "execute",
+	target_sprite: str = "Sprite",
+	session_id: Optional[str] = None
+) -> Dict[str, Any]:
+	"""
+	Generate Snap! blocks for a 6th grade math word problem.
+
+	This tool specializes in converting math word problems into interactive
+	Snap! block sequences that demonstrate mathematical reasoning step-by-step.
+
+	Args:
+		problem_text: Natural language math problem (e.g., "If 7 hours to mow 4 lawns, how many in 35 hours?")
+		grade_level: Grade level (6, 7, or 8) - affects complexity and scaffolding
+		execution_mode: "execute" (send to Snap!), "preview" (return JSON), "explain" (return explanation)
+		target_sprite: Which sprite to add blocks to
+		session_id: Optional session ID (uses most recent if not provided)
+
+	Returns:
+		Dict with success status, generated blocks, and execution results
+	"""
+
+	try:
+		from mcp_server.parsers.math_parser import parse_math_problem
+
+		print(f"🧮 Processing math problem: '{problem_text}'")
+
+		# Parse the math problem
+		parsed = parse_math_problem(problem_text)
+		print(f"📊 Parsed: pattern={parsed['pattern']}, numbers={parsed['numbers']}")
+
+		if not parsed["pattern"]:
+			return {
+				"success": False,
+				"error": "Could not identify math pattern in the problem",
+				"suggestions": [
+					"Try: 'If 7 hours to mow 4 lawns, how many in 35 hours?'",
+					"Try: 'Ratio 3:2, scale by 4'",
+					"Try: 'Divide 20 cookies among 5 kids'"
+				],
+				"available_patterns": ["unit_rate", "ratio_equivalent", "simple_division"]
+			}
+
+		# Generate blocks using math pattern
+		snap_json = generator.generate_from_math_pattern(parsed)
+
+		if "error" in snap_json.get("payload", {}):
+			return {
+				"success": False,
+				"error": f"Math block generation failed: {snap_json['payload']['error']}",
+				"pattern": parsed["pattern"],
+				"numbers": parsed["numbers"]
+			}
+
+		print(f"✓ Generated math blocks for pattern: {parsed['pattern']}")
+
+		# Handle different execution modes
+		if execution_mode == "explain":
+			return {
+				"success": True,
+				"mode": "explain",
+				"pattern": parsed["pattern"],
+				"numbers": parsed["numbers"],
+				"explanation": f"This is a {parsed['pattern']} problem. The numbers {parsed['numbers']} will be used to create step-by-step calculations in Snap! blocks.",
+				"block_count": len(snap_json.get("payload", {}).get("scripts", [{}])[0].get("blocks", [])),
+				"math_concept": parsed["pattern"].replace("_", " ").title()
+			}
+
+		elif execution_mode == "preview":
+			return {
+				"success": True,
+				"mode": "preview",
+				"pattern": parsed["pattern"],
+				"numbers": parsed["numbers"],
+				"snap_json": snap_json,
+				"block_count": len(snap_json.get("payload", {}).get("scripts", [{}])[0].get("blocks", []))
+			}
+
+		# Execute mode - send to Snap!
+		if not session_id:
+			if not active_sessions:
+				return {
+					"success": False,
+					"error": "No active Snap! session found",
+					"next_action": "Call start_snap_session to begin"
+				}
+			session_id = max(active_sessions.keys(), key=lambda k: active_sessions[k]["created_at"])
+
+		# Send to Snap! via bridge communicator
+		result = await bridge_communicator.send_blocks(snap_json, session_id)
+
+		return {
+			"success": True,
+			"mode": "execute",
+			"pattern": parsed["pattern"],
+			"numbers": parsed["numbers"],
+			"blocks_sent": len(snap_json.get("payload", {}).get("scripts", [{}])[0].get("blocks", [])),
+			"session_id": session_id,
+			"execution_result": result
+		}
+
+	except Exception as e:
+		return {
+			"success": False,
+			"error": str(e),
+			"error_type": "math_generation_failed",
+			"debug_info": {
+				"problem_text": problem_text,
+				"grade_level": grade_level,
 				"execution_mode": execution_mode
 			}
 		}
