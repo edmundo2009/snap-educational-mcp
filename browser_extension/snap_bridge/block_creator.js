@@ -1,4 +1,4 @@
-// snap_bridge/block_creator.js - Snap! Block Creation and Manipulation
+// browser_extension/snap_bridge/block_creator.js - Snap! Block Creation and Manipulation
 
 // Prevent duplicate loading
 if (typeof window.SnapBlockCreator !== 'undefined') {
@@ -164,9 +164,7 @@ class SnapBlockCreator {
     }
   }
 
-  /**
-   * Create a script from block specifications
-   */
+  // Revert createScript to its simpler, original form
   async createScript(blockSpecs, position = { x: 50, y: 50 }) {
     const sprite = this.getCurrentSprite();
     const createdBlocks = [];
@@ -178,29 +176,27 @@ class SnapBlockCreator {
 
       if (block) {
         createdBlocks.push(block);
-
-        // Connect to previous block if not a hat block
-        if (previousBlock && !blockSpec.is_hat_block) {
+        if (previousBlock) {
           this.connectBlocks(previousBlock, block);
         }
-
         previousBlock = block;
       }
     }
 
-    // Position the first block (hat block or first block)
     if (createdBlocks.length > 0) {
       const firstBlock = createdBlocks[0];
       firstBlock.setPosition(new Point(position.x, position.y));
       sprite.scripts.add(firstBlock);
     }
 
+    // A single changed() at the end is sufficient.
+    sprite.scripts.changed();
     return createdBlocks;
   }
 
   /**
    * Create a single block from specification.
-   * This version is based on a direct trace of Snap!'s internal variable setting process.
+   * This version is a minimal, evidence-based implementation based on our debugging findings.
    */
   async createSingleBlock(blockSpec, sprite) {
     try {
@@ -208,16 +204,17 @@ class SnapBlockCreator {
       const ide = this.apiWrapper.getIDE();
 
       const selectorMap = {
+        // Reverted to the proven, working selector.
         whenGreenFlag: "receiveGo",
         doSay: "doSayFor",
       };
-
       const selector = selectorMap[opcode] || opcode;
       const block = sprite.blockForSelector(selector);
 
       if (!block) {
+        // This error is now critical for debugging.
         console.error(
-          `Block creation failed for opcode: '${opcode}' (using selector: '${selector}')`
+          `Block creation failed for opcode: '${opcode}' (using selector '${selector}')`
         );
         return null;
       }
@@ -225,29 +222,20 @@ class SnapBlockCreator {
       if (opcode === "doSetVar") {
         if (inputs && inputs.VAR !== undefined && inputs.VALUE !== undefined) {
           const varName = inputs.VAR;
-          // Step 1: Ensure the variable exists on the sprite's variable frame.
           sprite.variables.addVar(varName);
-
-          // Step 2: Get the actual Variable object. This is what the block uses internally.
-          // Source: This pattern is used throughout threads.js for variable evaluation.
           const variableObject = sprite.variables.getVar(varName);
 
-          // Step 3: Get a direct reference to the two input morphs.
           const variableInput = block.inputs()[0];
           const valueInput = block.inputs()[1];
 
-          // Step 4: THIS IS THE CRITICAL STEP.
-          // Set the internal 'contents' of the dropdown to be the *Variable object itself*.
-          // This binds the UI element's data model to the actual variable.
-          // Source: See MenuMorph.invoke() which calls this on its target.
+          // The core hypothesis: Set the data, then trigger a generic refresh.
+          // 1. Set the block's internal data model.
           variableInput.setContents(variableObject);
 
-          // Step 5: Tell the input to visually update its label based on its new contents.
-          // This function reads the name from the Variable object and redraws the label.
-          // Source: This method is defined in widgets.js for InputSlotMorph.
-          variableInput.updateLabel();
+          // 2. Tell the dropdown it has changed, forcing a redraw.
+          variableInput.changed();
 
-          // Step 6: Set the value for the second input.
+          // 3. Set the value.
           valueInput.setContents(inputs.VALUE);
         }
       } else if (opcode === "doSay") {
@@ -264,7 +252,6 @@ class SnapBlockCreator {
 
       block.setColor(ide.palette[category]);
       block.fixLayout();
-      if (sprite.scripts) sprite.scripts.changed();
 
       return block;
     } catch (error) {
