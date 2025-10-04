@@ -3,9 +3,9 @@ from pathlib import Path
 import time
 from mcp_server.tools.snap_communicator import SnapBridgeCommunicator, create_project_xml
 from mcp_server.parsers.intent_parser import SnapIntentParser, ParsedIntent
-from mcp_server.tools._tutorial_creator import TutorialCreator
-from mcp_server.tools._concept_explainer import ConceptExplainer
-from mcp_server.tools.block_generator import SnapBlockGenerator, BlockSequence
+# from mcp_server.tools._tutorial_creator import TutorialCreator
+# from mcp_server.tools._concept_explainer import ConceptExplainer
+# from mcp_server.tools.block_generator import SnapBlockGenerator, BlockSequence
 import websockets
 from mcp.server import FastMCP
 from dataclasses import dataclass, asdict
@@ -30,8 +30,6 @@ mcp = FastMCP("snap-edu")
 # Global components (initialized at startup)
 parser = None
 generator = None
-explainer = None
-tutorial_creator = None
 bridge_communicator = None
 
 # Active sessions and tokens - now with file persistence
@@ -156,17 +154,16 @@ def initialize_snap_system():
 		print("🚀 Initializing Snap! Educational System...")
 
 		# Initialize knowledge-driven components
-		parser = SnapIntentParser()
-		generator = SnapBlockGenerator(
-			knowledge_path="mcp_server/knowledge/snap_blocks.json",
-			patterns_path="mcp_server/knowledge/patterns.json"
-		)
-		explainer = ConceptExplainer(
-			concepts_path="mcp_server/knowledge/concepts.json"
-		)
-		tutorial_creator = TutorialCreator(
-			templates_path="mcp_server/knowledge/tutorials.json"
-		)
+		# parser = SnapIntentParser()
+		# generator = SnapBlockGenerator(
+		# 	knowledge_path="mcp_server/knowledge/snap_blocks.json"
+		# )
+		# explainer = ConceptExplainer(
+		# 	concepts_path="mcp_server/knowledge/concepts.json"
+		# )
+		# tutorial_creator = TutorialCreator(
+		# 	templates_path="mcp_server/knowledge/tutorials.json"
+		# )
 
 		# Initialize WebSocket bridge communicator with token validator and session callbacks
 		bridge_communicator = SnapBridgeCommunicator(
@@ -179,8 +176,8 @@ def initialize_snap_system():
 		)
 
 		print("✓ Snap! educational system initialized")
-		print(
-			f"✓ {len(generator.get_available_actions())} programming patterns loaded")
+		# print(
+		# 	f"✓ {len(generator.get_available_actions())} programming patterns loaded")
 		print(f"✓ WebSocket bridge ready on ws://localhost:8765")
 
 		return True
@@ -461,163 +458,163 @@ def check_snap_connection(session_id: str) -> Dict[str, Any]:
 # ============================================================================
 
 
-# COMMENTED OUT FOR MATH POC - NOT NEEDED
-@mcp.tool()
-async def generate_snap_blocks(
-	description: str,
-	complexity: Literal["beginner", "intermediate", "advanced"] = "beginner",
-	execution_mode: Literal["execute", "preview", "explain"] = "execute",
-	target_sprite: str = "Sprite",
-	animate: bool = True,
-	session_id: Optional[str] = None
-) -> Dict[str, Any]:
-	"""
-	Convert natural language to Snap! blocks and optionally execute in browser.
+# # COMMENTED OUT FOR MATH POC - NOT NEEDED
+# @mcp.tool()
+# async def generate_snap_blocks(
+# 	description: str,
+# 	complexity: Literal["beginner", "intermediate", "advanced"] = "beginner",
+# 	execution_mode: Literal["execute", "preview", "explain"] = "execute",
+# 	target_sprite: str = "Sprite",
+# 	animate: bool = True,
+# 	session_id: Optional[str] = None
+# ) -> Dict[str, Any]:
+# 	"""
+# 	Convert natural language to Snap! blocks and optionally execute in browser.
 
-	This is the main tool for creating Snap! programs from descriptions.
+# 	This is the main tool for creating Snap! programs from descriptions.
 
-	Args:
-		description: Natural language description (e.g., "make sprite jump when space pressed")
-		complexity: Difficulty level for educational appropriateness
-		execution_mode:
-			- "execute": Create blocks in browser immediately
-			- "preview": Show what would be created without executing
-			- "explain": Just explain what the code would do
-		target_sprite: Which sprite to add blocks to (default: "Sprite")
-		animate: Show visual feedback during creation
-		session_id: Session ID (optional, will use most recent if not provided)
+# 	Args:
+# 		description: Natural language description (e.g., "make sprite jump when space pressed")
+# 		complexity: Difficulty level for educational appropriateness
+# 		execution_mode:
+# 			- "execute": Create blocks in browser immediately
+# 			- "preview": Show what would be created without executing
+# 			- "explain": Just explain what the code would do
+# 		target_sprite: Which sprite to add blocks to (default: "Sprite")
+# 		animate: Show visual feedback during creation
+# 		session_id: Session ID (optional, will use most recent if not provided)
 
-	Returns:
-		Results including block specifications, explanations, and execution status
-	"""
-	try:
-		# Get active session
-		if not session_id:
-			if not active_sessions:
-				return {
-					"success": False,
-					"error": "No active session. Call start_snap_session first.",
-					"next_action": "Call start_snap_session to begin"
-				}
-			# Use most recent session
-			session_id = max(active_sessions.keys(),
-							 key=lambda k: active_sessions[k]["created_at"])
+# 	Returns:
+# 		Results including block specifications, explanations, and execution status
+# 	"""
+# 	try:
+# 		# Get active session
+# 		if not session_id:
+# 			if not active_sessions:
+# 				return {
+# 					"success": False,
+# 					"error": "No active session. Call start_snap_session first.",
+# 					"next_action": "Call start_snap_session to begin"
+# 				}
+# 			# Use most recent session
+# 			session_id = max(active_sessions.keys(),
+# 							 key=lambda k: active_sessions[k]["created_at"])
 
-		# Parse natural language
-		print(f"📝 Parsing: '{description}'")
-		intents = parser.parse(description)
+# 		# Parse natural language
+# 		print(f"📝 Parsing: '{description}'")
+# 		intents = parser.parse(description)
 
-		if not intents:
-			return {
-				"success": False,
-				"error": "Could not understand the request",
-				"suggestions": [
-					"Try: 'make sprite move right 10 steps'",
-					"Try: 'when space key pressed jump up'",
-					"Try: 'spin forever and change colors'",
-					"Try: 'follow the mouse pointer'"
-				],
-				"available_patterns": generator.get_available_actions()[:10]
-			}
+# 		if not intents:
+# 			return {
+# 				"success": False,
+# 				"error": "Could not understand the request",
+# 				"suggestions": [
+# 					"Try: 'make sprite move right 10 steps'",
+# 					"Try: 'when space key pressed jump up'",
+# 					"Try: 'spin forever and change colors'",
+# 					"Try: 'follow the mouse pointer'"
+# 				],
+# 				"available_patterns": generator.get_available_actions()[:10]
+# 			}
 
-		print(f"✓ Parsed {len(intents)} intent(s)")
+# 		print(f"✓ Parsed {len(intents)} intent(s)")
 
-		# Generate block sequence
-		block_sequence = generator.generate_blocks(intents, complexity)
+# 		# Generate block sequence
+# 		block_sequence = generator.generate_blocks(intents, complexity)
 
-		print(f"✓ Generated {len(block_sequence.blocks)} block(s)")
+# 		print(f"✓ Generated {len(block_sequence.blocks)} block(s)")
 
-		# Format for Snap! bridge
-		snap_spec = generator.format_for_snap(block_sequence, target_sprite)
+# 		# Format for Snap! bridge
+# 		snap_spec = generator.format_for_snap(block_sequence, target_sprite)
 
-		# Handle different execution modes
-		if execution_mode == "explain":
-			return {
-				"success": True,
-				"mode": "explain",
-				"explanation": block_sequence.explanation,
-				"difficulty": block_sequence.difficulty,
-				"block_count": len(block_sequence.blocks),
-				"what_it_does": block_sequence.explanation,
-				"blocks_summary": [
-					{
-						"category": block.category,
-						"description": block.description
-					}
-					for block in block_sequence.blocks
-				],
-				"next_step": "Set execution_mode='execute' to create these blocks in Snap!"
-			}
+# 		# Handle different execution modes
+# 		if execution_mode == "explain":
+# 			return {
+# 				"success": True,
+# 				"mode": "explain",
+# 				"explanation": block_sequence.explanation,
+# 				"difficulty": block_sequence.difficulty,
+# 				"block_count": len(block_sequence.blocks),
+# 				"what_it_does": block_sequence.explanation,
+# 				"blocks_summary": [
+# 					{
+# 						"category": block.category,
+# 						"description": block.description
+# 					}
+# 					for block in block_sequence.blocks
+# 				],
+# 				"next_step": "Set execution_mode='execute' to create these blocks in Snap!"
+# 			}
 
-		elif execution_mode == "preview":
-			return {
-				"success": True,
-				"mode": "preview",
-				"explanation": block_sequence.explanation,
-				"difficulty": block_sequence.difficulty,
-				"blocks": [asdict(block) for block in block_sequence.blocks],
-				"snap_specification": snap_spec,
-				"estimated_creation_time_ms": len(block_sequence.blocks) * 100,
-				"next_step": "Set execution_mode='execute' to create these blocks in Snap!"
-			}
+# 		elif execution_mode == "preview":
+# 			return {
+# 				"success": True,
+# 				"mode": "preview",
+# 				"explanation": block_sequence.explanation,
+# 				"difficulty": block_sequence.difficulty,
+# 				"blocks": [asdict(block) for block in block_sequence.blocks],
+# 				"snap_specification": snap_spec,
+# 				"estimated_creation_time_ms": len(block_sequence.blocks) * 100,
+# 				"next_step": "Set execution_mode='execute' to create these blocks in Snap!"
+# 			}
 
-		elif execution_mode == "execute":
-			# Check connection
-			if not bridge_communicator.is_connected(session_id):
-				return {
-					"success": False,
-					"error": "Browser not connected",
-					"explanation": block_sequence.explanation,
-					"blocks_ready": True,
-					"blocks": [asdict(block) for block in block_sequence.blocks],
-					"next_action": "Connect browser extension and try again"
-				}
+# 		elif execution_mode == "execute":
+# 			# Check connection
+# 			if not bridge_communicator.is_connected(session_id):
+# 				return {
+# 					"success": False,
+# 					"error": "Browser not connected",
+# 					"explanation": block_sequence.explanation,
+# 					"blocks_ready": True,
+# 					"blocks": [asdict(block) for block in block_sequence.blocks],
+# 					"next_action": "Connect browser extension and try again"
+# 				}
 
-			# Execute via bridge
-			print(f"🚀 Sending to Snap! browser...")
+# 			# Execute via bridge
+# 			print(f"🚀 Sending to Snap! browser...")
 
-			result = await bridge_communicator.create_blocks(
-				session_id=session_id,
-				snap_spec=snap_spec,
-				animate=animate
-			)
+# 			result = await bridge_communicator.create_blocks(
+# 				session_id=session_id,
+# 				snap_spec=snap_spec,
+# 				animate=animate
+# 			)
 
-			if result["status"] == "success":
-				return {
-					"success": True,
-					"mode": "execute",
-					"blocks_created": result["blocks_created"],
-					"scripts_created": result["scripts_created"],
-					"execution_time_ms": result["execution_time_ms"],
-					"explanation": block_sequence.explanation,
-					"difficulty": block_sequence.difficulty,
-					"sprite": target_sprite,
-					"next_steps": [
-						"Click the green flag in Snap! to run your program",
-						"Try modifying the blocks in Snap!",
-						f"Ask me to explain: '{block_sequence.difficulty} programming concepts'"
-					],
-					"success_message": f"✨ Created {result['blocks_created']} blocks in Snap! {block_sequence.explanation}"
-				}
-			else:
-				return {
-					"success": False,
-					"error": result.get("error", "Unknown error"),
-					"error_details": result.get("details"),
-					"recovery_suggestions": result.get("recovery_suggestions", [])
-				}
+# 			if result["status"] == "success":
+# 				return {
+# 					"success": True,
+# 					"mode": "execute",
+# 					"blocks_created": result["blocks_created"],
+# 					"scripts_created": result["scripts_created"],
+# 					"execution_time_ms": result["execution_time_ms"],
+# 					"explanation": block_sequence.explanation,
+# 					"difficulty": block_sequence.difficulty,
+# 					"sprite": target_sprite,
+# 					"next_steps": [
+# 						"Click the green flag in Snap! to run your program",
+# 						"Try modifying the blocks in Snap!",
+# 						f"Ask me to explain: '{block_sequence.difficulty} programming concepts'"
+# 					],
+# 					"success_message": f"✨ Created {result['blocks_created']} blocks in Snap! {block_sequence.explanation}"
+# 				}
+# 			else:
+# 				return {
+# 					"success": False,
+# 					"error": result.get("error", "Unknown error"),
+# 					"error_details": result.get("details"),
+# 					"recovery_suggestions": result.get("recovery_suggestions", [])
+# 				}
 
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e),
-			"error_type": "generation_failed",
-			"debug_info": {
-				"description": description,
-				"complexity": complexity,
-				"execution_mode": execution_mode
-			}
-		}
+# 	except Exception as e:
+# 		return {
+# 			"success": False,
+# 			"error": str(e),
+# 			"error_type": "generation_failed",
+# 			"debug_info": {
+# 				"description": description,
+# 				"complexity": complexity,
+# 				"execution_mode": execution_mode
+# 			}
+# 		}
 
 # in mcp_server/main.py
 
@@ -727,169 +724,7 @@ async def generate_math_blocks(
             "debug_info": {"problem_text": problem_text}
         }
 
-# ============================================================================
-# MCP TOOLS - CONCEPT EXPLANATION
-# ============================================================================
 
-
-@mcp.tool()
-def explain_snap_concept(
-	concept: str,
-	age_level: Literal["beginner", "intermediate", "advanced"] = "beginner",
-	include_examples: bool = True
-) -> Dict[str, Any]:
-	"""
-	Explain Snap! programming concepts in kid-friendly language.
-	
-	Great for learning before coding or understanding what blocks do.
-	
-	Args:
-		concept: Programming concept (e.g., "loops", "events", "first-class functions")
-		age_level: Complexity of explanation
-		include_examples: Include code examples
-	
-	Returns:
-		Educational explanation with examples and related concepts
-	"""
-	try:
-		explanation = explainer.explain(concept, age_level)
-
-		if not explanation:
-			available = explainer.get_available_concepts()
-			return {
-				"success": False,
-				"error": f"Concept '{concept}' not found",
-				"available_concepts": available,
-				"suggestion": f"Try: {', '.join(available[:5])}"
-			}
-
-		result = {
-			"success": True,
-			"concept": concept,
-			"age_level": age_level,
-			"explanation": explanation["text"],
-			"key_points": explanation.get("key_points", []),
-			"related_concepts": explanation.get("related", [])
-		}
-
-		if include_examples:
-			result["examples"] = explanation.get("examples", [])
-			result["try_it"] = explanation.get("try_commands", [])
-
-		return result
-
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e)
-		}
-
-
-@mcp.tool()
-def list_snap_concepts(category: Optional[str] = None) -> Dict[str, Any]:
-	"""
-	List all available Snap! concepts that can be explained.
-	
-	Args:
-		category: Optional filter (e.g., "control", "data", "functions")
-	
-	Returns:
-		List of concepts organized by category
-	"""
-	try:
-		concepts = explainer.list_concepts(category)
-
-		return {
-			"success": True,
-			"concepts": concepts,
-			"total_count": sum(len(items) for items in concepts.values()),
-			"tip": "Use explain_snap_concept(concept_name) to learn about any concept"
-		}
-
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e)
-		}
-
-# ============================================================================
-# MCP TOOLS - TUTORIAL CREATION
-# ============================================================================
-
-
-@mcp.tool()
-async def create_snap_tutorial(
-	goal: str,
-	difficulty: Literal["beginner", "intermediate", "advanced"] = "beginner",
-	step_by_step: bool = True,
-	auto_execute: bool = False,
-	session_id: Optional[str] = None
-) -> Dict[str, Any]:
-	"""
-	Create a complete step-by-step tutorial for achieving a programming goal.
-	
-	Perfect for guided learning and structured lessons.
-	
-	Args:
-		goal: What to create (e.g., "a jumping game", "animated character")
-		difficulty: Tutorial complexity level
-		step_by_step: Include detailed steps
-		auto_execute: Automatically create blocks for each step
-		session_id: Session ID (optional)
-	
-	Returns:
-		Complete tutorial with steps, code, and explanations
-	"""
-	try:
-		# Generate tutorial
-		tutorial = tutorial_creator.create_tutorial(goal, difficulty)
-
-		if not tutorial:
-			return {
-				"success": False,
-				"error": f"Could not create tutorial for '{goal}'",
-				"suggestions": tutorial_creator.get_popular_topics()
-			}
-
-		result = {
-			"success": True,
-			"title": tutorial["title"],
-			"goal": goal,
-			"difficulty": difficulty,
-			"estimated_time": tutorial["estimated_time"],
-			"overview": tutorial["overview"],
-			"prerequisites": tutorial.get("prerequisites", []),
-			"learning_objectives": tutorial.get("objectives", [])
-		}
-
-		if step_by_step:
-			result["steps"] = tutorial["steps"]
-			result["total_steps"] = len(tutorial["steps"])
-
-		if auto_execute and session_id:
-			# Execute first step automatically
-			first_step = tutorial["steps"][0]
-			if "code_description" in first_step:
-				exec_result = await generate_snap_blocks(
-					description=first_step["code_description"],
-					complexity=difficulty,
-					execution_mode="execute",
-					session_id=session_id
-				)
-				result["first_step_executed"] = exec_result["success"]
-				result["next_step"] = tutorial["steps"][1] if len(
-					tutorial["steps"]) > 1 else None
-
-		result["completion_tips"] = tutorial.get("tips", [])
-		result["challenges"] = tutorial.get("follow_up_challenges", [])
-
-		return result
-
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e)
-		}
 
 # ============================================================================
 # MCP TOOLS - PROJECT INSPECTION
@@ -945,192 +780,6 @@ async def inspect_snap_project(
 			"error": str(e)
 		}
 
-# ============================================================================
-# MCP TOOLS - DEBUGGING ASSISTANCE
-# ============================================================================
-
-
-@mcp.tool()
-def debug_snap_program(
-	problem_description: str,
-	current_code_description: Optional[str] = None
-) -> Dict[str, Any]:
-	"""
-	Help debug common Snap! programming issues.
-	
-	Provides kid-friendly debugging suggestions and solutions.
-	
-	Args:
-		problem_description: What's going wrong (e.g., "sprite won't move")
-		current_code_description: Optional description of current blocks
-	
-	Returns:
-		Debugging suggestions and solutions
-	"""
-	try:
-		# Common problem patterns
-		debug_db = {
-			"won't move": {
-				"causes": [
-					"Missing event block (like 'when flag clicked')",
-					"Blocks not connected properly",
-					"Sprite already at edge of screen"
-				],
-				"solutions": [
-					"Add a 'when flag clicked' hat block at the top",
-					"Make sure all blocks snap together",
-					"Try 'go to x: 0 y: 0' to reset position"
-				],
-				"test": "Click green flag and watch sprite carefully"
-			},
-			"too fast": {
-				"causes": [
-					"No wait blocks between actions",
-					"Numbers too large in motion blocks"
-				],
-				"solutions": [
-					"Add 'wait 0.1 seconds' between movements",
-					"Use smaller numbers (try 5 instead of 50)"
-				],
-				"test": "Try different wait times to find what feels right"
-			},
-			"no sound": {
-				"causes": [
-					"Computer volume is off",
-					"Sound block not connected to event",
-					"Wrong sound selected"
-				],
-				"solutions": [
-					"Check computer volume settings",
-					"Make sure sound block comes after an event block",
-					"Try a different sound from the library"
-				],
-				"test": "Try 'play sound pop' to test audio"
-			},
-			"disappears": {
-				"causes": [
-					"Sprite moved off screen",
-					"Hide block was used",
-					"Size set to 0"
-				],
-				"solutions": [
-					"Use 'go to x: 0 y: 0' to bring back",
-					"Add 'show' block at start of script",
-					"Set size to 100%"
-				],
-				"test": "Right-click sprite in sprite list and select 'show'"
-			}
-		}
-
-		# Find matching problem
-		problem_lower = problem_description.lower()
-		matching = None
-		for key, solution in debug_db.items():
-			if key in problem_lower:
-				matching = (key, solution)
-				break
-
-		if matching:
-			problem_type, solution = matching
-			return {
-				"success": True,
-				"problem_type": problem_type,
-				"possible_causes": solution["causes"],
-				"solutions": solution["solutions"],
-				"how_to_test": solution["test"],
-				"general_tips": [
-					"Always start with an event block (green hat shape)",
-					"Make sure blocks snap together properly",
-					"Test one small part at a time",
-					"Use 'say' blocks to see what's happening"
-				]
-			}
-		else:
-			# Generic debugging help
-			return {
-				"success": True,
-				"problem_type": "general",
-				"message": "Here are some general debugging tips:",
-				"debugging_steps": [
-					"1. Check that you have an event block at the start",
-					"2. Make sure all blocks are connected (no gaps)",
-					"3. Try running just one block at a time",
-					"4. Use 'say' blocks to show what the sprite is thinking",
-					"5. Click the green flag to restart fresh"
-				],
-				"common_problems": list(debug_db.keys()),
-				"tip": "Describe your problem more specifically for better help"
-			}
-
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e)
-		}
-
-# ============================================================================
-# MCP TOOLS - ADVANCED SNAP! FEATURES
-# ============================================================================
-
-
-@mcp.tool()
-async def create_custom_snap_block(
-	block_name: str,
-	parameters: List[Dict[str, str]],
-	definition_description: str,
-	category: str = "custom",
-	session_id: Optional[str] = None
-) -> Dict[str, Any]:
-	"""
-	Create a custom Snap! block (leveraging Snap!'s advanced features).
-	
-	This teaches abstraction and code reuse.
-	
-	Args:
-		block_name: Name for the custom block (e.g., "jump with sound")
-		parameters: List of parameters [{name, type, default}]
-		definition_description: Natural language description of what block does
-		category: Block category (custom, motion, looks, etc.)
-		session_id: Session ID (optional)
-	
-	Returns:
-		Custom block creation status
-	"""
-	try:
-		# Parse definition
-		definition_intents = parser.parse(definition_description)
-		definition_blocks = generator.generate_blocks(
-			definition_intents, "intermediate")
-
-		# Format for custom block creation
-		custom_spec = {
-			"name": block_name,
-			"category": category,
-			"parameters": parameters,
-			"definition": [asdict(block) for block in definition_blocks.blocks]
-		}
-
-		# Get session
-		if not session_id:
-			session_id = max(active_sessions.keys(),
-							 key=lambda k: active_sessions[k]["created_at"])
-
-		# Send to bridge
-		result = await bridge_communicator.create_custom_block(session_id, custom_spec)
-
-		return {
-			"success": result["status"] == "success",
-			"block_name": block_name,
-			"message": f"Created custom block '{block_name}'!",
-			"how_to_use": f"Look for '{block_name}' in the {category} category",
-			"teaching_moment": "Custom blocks let you reuse code and make programs easier to read!"
-		}
-
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e)
-		}
 
 # ============================================================================
 # MAIN EXECUTION

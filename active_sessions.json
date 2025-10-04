@@ -35,5 +35,26 @@
     "created_at": "2025-10-04T12:31:32.411524",
     "expires_at": "2025-10-04T13:01:32.411524",
     "connected": false
+  },
+  "sess_2afa2ba849db": {
+    "token": "snap-mcp-43934065-4e6e-4326-b1af-0c37b5a42e1e",
+    "created_at": "2025-10-04T12:36:30.257410",
+    "expires_at": "2025-10-04T13:06:30.257410",
+    "connected": true,
+    "connected_at": "2025-10-04T21:36:38.997174"
+  },
+  "sess_4b1e852036cf": {
+    "token": "snap-mcp-fda926cc-85d6-482d-9554-7b99903014c7",
+    "created_at": "2025-10-04T12:45:42.342566",
+    "expires_at": "2025-10-04T13:15:42.342566",
+    "connected": true,
+    "connected_at": "2025-10-04T21:45:52.383309"
+  },
+  "sess_cdd41fd8130d": {
+    "token": "snap-mcp-96b55570-ad93-4490-97c1-84bd9834175a",
+    "created_at": "2025-10-04T13:38:08.475203",
+    "expires_at": "2025-10-04T14:08:08.475203",
+    "connected": true,
+    "connected_at": "2025-10-04T22:38:16.844837"
   }
 }
