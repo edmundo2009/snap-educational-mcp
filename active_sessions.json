@@ -158,5 +158,13 @@
     "expires_at": "2025-10-04T10:41:11.448034",
     "connected": true,
     "connected_at": "2025-10-04T19:11:29.679799"
+  },
+  "sess_2efb8b6386ce": {
+    "token": "snap-mcp-8aad0ae1-2901-470b-8609-25a98a0ab7c9",
+    "created_at": "2025-10-04T11:15:15.198618",
+    "expires_at": "2025-10-04T11:45:15.198618",
+    "connected": false,
+    "connected_at": "2025-10-04T20:15:23.421640",
+    "disconnected_at": "2025-10-04T20:18:11.660677"
   }
 }
