@@ -1,10 +1,10 @@
 # mcp_server/main.py - Snap! Educational MCP Server
 from pathlib import Path
 import time
-from mcp_server.tools.snap_communicator import SnapBridgeCommunicator
+from mcp_server.tools.snap_communicator import SnapBridgeCommunicator, create_project_xml
 from mcp_server.parsers.intent_parser import SnapIntentParser, ParsedIntent
-from mcp_server.tools.tutorial_creator import TutorialCreator
-from mcp_server.tools.concept_explainer import ConceptExplainer
+from mcp_server.tools._tutorial_creator import TutorialCreator
+from mcp_server.tools._concept_explainer import ConceptExplainer
 from mcp_server.tools.block_generator import SnapBlockGenerator, BlockSequence
 import websockets
 from mcp.server import FastMCP
@@ -619,123 +619,113 @@ async def generate_snap_blocks(
 			}
 		}
 
+# in mcp_server/main.py
+
 
 @mcp.tool()
 async def generate_math_blocks(
-	problem_text: str,
-	grade_level: int = 6,
-	execution_mode: Literal["execute", "preview", "explain"] = "execute",
-	target_sprite: str = "Sprite",
-	session_id: Optional[str] = None
+    problem_text: str,
+    grade_level: int = 6,
+    execution_mode: Literal["execute", "preview", "explain"] = "execute",
+    # This argument is no longer used but kept for API consistency
+    target_sprite: str = "Sprite",
+    session_id: Optional[str] = None
 ) -> Dict[str, Any]:
-	"""
-	Generate Snap! blocks for a 6th grade math word problem.
+    """
+    Generate a Snap! project for a 6th grade math word problem using an XML template.
 
-	This tool specializes in converting math word problems into interactive
-	Snap! block sequences that demonstrate mathematical reasoning step-by-step.
+    This tool specializes in converting math word problems into complete, pre-built
+    Snap! projects that demonstrate mathematical reasoning.
 
-	Args:
-		problem_text: Natural language math problem (e.g., "If 7 hours to mow 4 lawns, how many in 35 hours?")
-		grade_level: Grade level (6, 7, or 8) - affects complexity and scaffolding
-		execution_mode: "execute" (send to Snap!), "preview" (return JSON), "explain" (return explanation)
-		target_sprite: Which sprite to add blocks to
-		session_id: Optional session ID (uses most recent if not provided)
+    Args:
+        problem_text: Natural language math problem (e.g., "If 7 hours to mow 4 lawns, how many in 35 hours?")
+        grade_level: Grade level (6, 7, or 8) - affects complexity and scaffolding
+        execution_mode: "execute" (send to Snap!), "preview" (return XML), "explain" (return explanation)
+        target_sprite: Which sprite to add blocks to (Note: XML workflow rebuilds the whole project)
+        session_id: Optional session ID (uses most recent if not provided)
 
-	Returns:
-		Dict with success status, generated blocks, and execution results
-	"""
+    Returns:
+        Dict with success status, details of the operation, and execution results
+    """
+    try:
+        from mcp_server.parsers.math_parser import parse_math_problem
 
-	try:
-		from mcp_server.parsers.math_parser import parse_math_problem
+        print(
+            f"🧮 Processing math problem for XML generation: '{problem_text}'")
 
-		print(f"🧮 Processing math problem: '{problem_text}'")
+        # 1. Parse the math problem to extract numbers and pattern
+        parsed = parse_math_problem(problem_text)
+        print(
+            f"📊 Parsed: pattern={parsed['pattern']}, numbers={parsed['numbers']}")
 
-		# Parse the math problem
-		parsed = parse_math_problem(problem_text)
-		print(f"📊 Parsed: pattern={parsed['pattern']}, numbers={parsed['numbers']}")
+        if not parsed["pattern"] or parsed["pattern"] != 'unit_rate':
+            return {
+                "success": False,
+                "error": "This tool currently only supports the 'unit_rate' math pattern for XML generation.",
+                "suggestions": ["Try: 'If 7 hours to mow 4 lawns, how many in 35 hours?'"],
+            }
 
-		if not parsed["pattern"]:
-			return {
-				"success": False,
-				"error": "Could not identify math pattern in the problem",
-				"suggestions": [
-					"Try: 'If 7 hours to mow 4 lawns, how many in 35 hours?'",
-					"Try: 'Ratio 3:2, scale by 4'",
-					"Try: 'Divide 20 cookies among 5 kids'"
-				],
-				"available_patterns": ["unit_rate", "ratio_equivalent", "simple_division"]
-			}
+        # 2. NEW: Define the data structure for our Jinja2 XML template
+        # We map the parsed numbers directly to the variables in our template.
+        math_problem_data = {
+            'project_name': 'Unit Rate Word Problem',
+            'variables': [
+                {'name': 'quantity1',
+                	'value': parsed['numbers'][0], 'watcher_x': 10, 'watcher_y': 10},
+                {'name': 'quantity2',
+                	'value': parsed['numbers'][1], 'watcher_x': 10, 'watcher_y': 38},
+                {'name': 'unit_rate', 'value': 0, 'watcher_x': 10, 'watcher_y': 66}
+            ]
+        }
 
-		# Generate blocks using math pattern
-		snap_json = generator.generate_from_math_pattern(parsed)
+        # 3. NEW: Generate the full project XML string
+        project_xml_string = create_project_xml(math_problem_data)
+        print("✓ Generated project XML successfully.")
 
-		if "error" in snap_json.get("payload", {}):
-			return {
-				"success": False,
-				"error": f"Math block generation failed: {snap_json['payload']['error']}",
-				"pattern": parsed["pattern"],
-				"numbers": parsed["numbers"]
-			}
+        # 4. Handle different execution modes
+        if execution_mode == "explain":
+            return {
+                "success": True, "mode": "explain", "pattern": parsed["pattern"],
+                "explanation": "This is a unit rate problem. An entire Snap! project will be generated from an XML template to solve it.",
+                "math_concept": "Unit Rate Calculation"
+            }
 
-		print(f"✓ Generated math blocks for pattern: {parsed['pattern']}")
+        elif execution_mode == "preview":
+            return {
+                "success": True, "mode": "preview", "pattern": parsed["pattern"],
+                "project_xml": project_xml_string  # Return the generated XML for inspection
+            }
 
-		# Handle different execution modes
-		if execution_mode == "explain":
-			return {
-				"success": True,
-				"mode": "explain",
-				"pattern": parsed["pattern"],
-				"numbers": parsed["numbers"],
-				"explanation": f"This is a {parsed['pattern']} problem. The numbers {parsed['numbers']} will be used to create step-by-step calculations in Snap! blocks.",
-				"block_count": len(snap_json.get("payload", {}).get("scripts", [{}])[0].get("blocks", [])),
-				"math_concept": parsed["pattern"].replace("_", " ").title()
-			}
+        # 5. Execute mode - send the XML to Snap!
+        if not session_id:
+            if not active_sessions:
+                return {"success": False, "error": "No active Snap! session found"}
+            session_id = max(active_sessions.keys(),
+                             key=lambda k: active_sessions[k]["created_at"])
 
-		elif execution_mode == "preview":
-			return {
-				"success": True,
-				"mode": "preview",
-				"pattern": parsed["pattern"],
-				"numbers": parsed["numbers"],
-				"snap_json": snap_json,
-				"block_count": len(snap_json.get("payload", {}).get("scripts", [{}])[0].get("blocks", []))
-			}
+        # 6. REPLACED: Call the new communicator method instead of create_blocks
+        print(f"🚀 Sending XML project to session {session_id}...")
+        result = await bridge_communicator.load_project_from_xml(
+            session_id,
+            project_xml_string,
+            math_problem_data['project_name']
+        )
+        print("✅ Successfully sent XML project to Snap! extension.")
 
-		# Execute mode - send to Snap!
-		if not session_id:
-			if not active_sessions:
-				return {
-					"success": False,
-					"error": "No active Snap! session found",
-					"next_action": "Call start_snap_session to begin"
-				}
-			session_id = max(active_sessions.keys(),
-			                 key=lambda k: active_sessions[k]["created_at"])
+        return {
+            "success": True, "mode": "execute", "pattern": parsed["pattern"],
+            "numbers": parsed["numbers"], "xml_sent": True,
+            "session_id": session_id, "execution_result": result
+        }
 
-		# Send to Snap! via bridge communicator
-		result = await bridge_communicator.create_blocks(session_id, snap_json)
-
-		return {
-			"success": True,
-			"mode": "execute",
-			"pattern": parsed["pattern"],
-			"numbers": parsed["numbers"],
-			"blocks_sent": len(snap_json.get("payload", {}).get("scripts", [{}])[0].get("blocks", [])),
-			"session_id": session_id,
-			"execution_result": result
-		}
-
-	except Exception as e:
-		return {
-			"success": False,
-			"error": str(e),
-			"error_type": "math_generation_failed",
-			"debug_info": {
-				"problem_text": problem_text,
-				"grade_level": grade_level,
-				"execution_mode": execution_mode
-			}
-		}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False, "error": str(e),
+            "error_type": "xml_generation_failed",
+            "debug_info": {"problem_text": problem_text}
+        }
 
 # ============================================================================
 # MCP TOOLS - CONCEPT EXPLANATION

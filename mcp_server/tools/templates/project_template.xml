@@ -1,0 +1,48 @@
+<project app="Snap! 11.0.4, https://snap.berkeley.edu" name="{{ project_name }}" version="2">
+	<scenes select="1">
+		<scene name="{{ project_name }}">
+			<stage>
+				<variables/>
+				<blocks/>
+				<scripts/>
+				<sprites select="1">
+					<sprite color="80,80,80,1" costume="0" draggable="true" heading="90" id="13" idx="1" name="Sprite" pan="0" pen="tip" rotation="1" scale="1" volume="100" x="0" y="0">
+						<blocks/>
+						<variables/>
+						<scripts>
+							<script x="64" y="59">
+								<block s="doSetVar">
+									<l>{{ variables[0].name }}</l>
+									<l>{{ variables[0].value }}</l>
+								</block>
+								<block s="doSetVar">
+									<l>{{ variables[1].name }}</l>
+									<l>{{ variables[1].value }}</l>
+								</block>
+							</script>
+							<script x="63" y="136">
+								<block s="doSetVar">
+									<l>{{ variables[2].name }}</l>
+									<block s="reportQuotient">
+										<block var="{{ variables[0].name }}"/>
+										<block var="{{ variables[1].name }}"/>
+									</block>
+								</block>
+							</script>
+						</scripts>
+					</sprite>
+                    {% for var in variables -%}
+					<watcher color="243,118,29" style="normal" var="{{ var.name }}" x="{{ var.watcher_x }}" y="{{ var.watcher_y }}"/>
+                    {% endfor -%}
+				</sprites>
+			</stage>
+			<variables>
+                {% for var in variables -%}
+				<variable name="{{ var.name }}">
+					<l>{{ var.value }}</l>
+				</variable>
+                {% endfor -%}
+			</variables>
+		</scene>
+	</scenes>
+</project>

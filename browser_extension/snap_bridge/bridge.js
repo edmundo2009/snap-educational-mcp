@@ -87,14 +87,29 @@ class SnapBridge {
         }
     }
 
-    // Execute a command (logic from handleCommand)
+
+
+    // in browser_extension/snap_bridge/bridge.js
+
+    // Execute a command
     async executeCommand(message) {
         try {
             let result;
+            // This switch statement is the command router.
             switch (message.command) {
+                // NEW: Add the case for our new, primary command.
+                case 'load_project':
+                    result = await this.blockCreator.loadProject(message.payload);
+                    break;
+                
+                // OLD: Remove this case, as it's been replaced by the XML workflow.
+                /*
                 case 'create_blocks':
                     result = await this.blockCreator.createBlocks(message.payload);
                     break;
+                */
+
+                // Keep all other existing commands as they are still valid.
                 case 'read_project':
                     result = await this.apiWrapper.readProject(message.payload);
                     break;
@@ -105,9 +120,11 @@ class SnapBridge {
                     result = await this.apiWrapper.inspectState(message.payload);
                     break;
                 case 'delete_blocks':
-                    result = await this.blockCreator.deleteBlocks(message.payload);
+                    // This assumes deleteBlocks lives in blockCreator. Adjust if it's elsewhere.
+                    result = await this.blockCreator.deleteBlocks(message.payload); 
                     break;
                 case 'create_custom_block':
+                     // This assumes createCustomBlock lives in blockCreator. Adjust if it's elsewhere.
                     result = await this.blockCreator.createCustomBlock(message.payload);
                     break;
                 case 'highlight_blocks':
@@ -117,7 +134,8 @@ class SnapBridge {
                     result = await this.apiWrapper.exportProject(message.payload);
                     break;
                 default:
-                    throw new Error(`Unknown command: ${message.command}`);
+                    // It's good practice to throw an error for unknown commands.
+                    throw new Error(`Unknown command received: ${message.command}`);
             }
             this.sendResponse(message.message_id, 'success', result);
         } catch (error) {
