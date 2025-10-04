@@ -1,5 +1,4 @@
 
-active_sessions.*
 tests/
 old-docs/
 # Byte-compiled / optimized / DLL files
@@ -176,3 +175,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+Status
+active_sessions.json
