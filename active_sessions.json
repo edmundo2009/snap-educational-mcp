@@ -63,5 +63,12 @@
     "expires_at": "2025-10-04T14:17:36.433778",
     "connected": true,
     "connected_at": "2025-10-04T22:47:49.268814"
+  },
+  "sess_2fb59200d112": {
+    "token": "snap-mcp-baeb1ef2-477d-4155-808a-8c65dc399c12",
+    "created_at": "2025-10-04T13:52:50.379312",
+    "expires_at": "2025-10-04T14:22:50.379312",
+    "connected": true,
+    "connected_at": "2025-10-04T22:53:00.201837"
   }
 }
